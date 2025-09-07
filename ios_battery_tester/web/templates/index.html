@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iOS Battery Drain Testing Utility</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Socket.IO -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.0/socket.io.js"></script>
+    
+    <style>
+        .device-card {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .device-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .battery-level {
+            width: 50px;
+            height: 20px;
+            border: 2px solid #333;
+            border-radius: 3px;
+            position: relative;
+            display: inline-block;
+            margin-left: 10px;
+        }
+        .battery-fill {
+            height: 100%;
+            border-radius: 1px;
+            transition: all 0.3s ease;
+        }
+        .test-running {
+            background: linear-gradient(45deg, #007bff, #0056b3);
+            color: white;
+        }
+        .test-completed {
+            background: linear-gradient(45deg, #28a745, #1e7e34);
+            color: white;
+        }
+        .test-failed {
+            background: linear-gradient(45deg, #dc3545, #c82333);
+            color: white;
+        }
+        .real-time-chart {
+            height: 300px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-lightning-charge"></i>
+                iOS Battery Tester
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#dashboard" data-tab="dashboard">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#devices" data-tab="devices">Devices</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#tests" data-tab="tests">Tests</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#results" data-tab="results">Results</a>
+                    </li>
+                </ul>
+                <button class="btn btn-outline-success" id="refreshDevices">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- Dashboard Tab -->
+        <div id="dashboard-tab" class="tab-content active">
+            <h2><i class="bi bi-speedometer2"></i> Dashboard</h2>
+            
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5 class="card-title">Connected Devices</h5>
+                            <h2 class="text-primary" id="deviceCount">0</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5 class="card-title">Active Tests</h5>
+                            <h2 class="text-warning" id="activeTestCount">0</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5 class="card-title">Completed Tests</h5>
+                            <h2 class="text-success" id="completedTestCount">0</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h5 class="card-title">Failed Tests</h5>
+                            <h2 class="text-danger" id="failedTestCount">0</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="bi bi-phone"></i> Connected Devices</h5>
+                        </div>
+                        <div class="card-body" id="dashboardDevices">
+                            <p class="text-muted">No devices connected</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="bi bi-activity"></i> Recent Activity</h5>
+                        </div>
+                        <div class="card-body" id="recentActivity">
+                            <p class="text-muted">No recent activity</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Devices Tab -->
+        <div id="devices-tab" class="tab-content">
+            <h2><i class="bi bi-phone"></i> Devices</h2>
+            <div class="row" id="devicesContainer">
+                <div class="col-12 text-center">
+                    <output class="spinner-border text-primary">
+                        <span class="visually-hidden">Loading devices...</span>
+                    </output>
+                    <p class="mt-2">Discovering devices...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tests Tab -->
+        <div id="tests-tab" class="tab-content">
+            <h2><i class="bi bi-play-circle"></i> Battery Tests</h2>
+            
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Start New Test</h5>
+                        </div>
+                        <div class="card-body">
+                            <form id="startTestForm">
+                                <div class="mb-3">
+                                    <label class="form-label" for="testDeviceSelect">Select Device</label>
+                                    <select class="form-select" id="testDeviceSelect" required>
+                                        <option value="">Choose a device...</option>
+                                    </select>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label" for="testScenarioSelect">Test Scenario</label>
+                                    <select class="form-select" id="testScenarioSelect" required>
+                                        <option value="">Choose a scenario...</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-play-fill"></i> Start Test
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Available Scenarios</h5>
+                        </div>
+                        <div class="card-body" id="scenariosList">
+                            <output class="spinner-border spinner-border-sm"></output>
+                            Loading scenarios...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="bi bi-list-task"></i> Active Tests</h5>
+                </div>
+                <div class="card-body" id="activeTestsList">
+                    <p class="text-muted">No active tests</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Tab -->
+        <div id="results-tab" class="tab-content">
+            <h2><i class="bi bi-bar-chart"></i> Test Results</h2>
+            
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5>Test History</h5>
+                    <button class="btn btn-outline-primary btn-sm" id="exportResults">
+                        <i class="bi bi-download"></i> Export
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="resultsTable">
+                            <thead>
+                                <tr>
+                                    <th>Test</th>
+                                    <th>Device</th>
+                                    <th>Status</th>
+                                    <th>Duration</th>
+                                    <th>Battery Drain</th>
+                                    <th>Drain Rate</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted">Loading test results...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Test Detail Modal -->
+    <div class="modal fade" id="testDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Test Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Test Information</h6>
+                            <div id="testInfo"></div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Battery Chart</h6>
+                            <canvas id="batteryChart" class="real-time-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-danger" id="stopTestBtn" style="display: none;">
+                        <i class="bi bi-stop-fill"></i> Stop Test
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Main Application Script -->
+    <script>
+        class BatteryTesterApp {
+            constructor() {
+                this.socket = io();
+                this.devices = [];
+                this.scenarios = [];
+                this.tests = [];
+                this.charts = {};
+                
+                this.init();
+            }
+
+            init() {
+                this.setupEventListeners();
+                this.setupSocket();
+                this.loadInitialData();
+            }
+
+            setupEventListeners() {
+                // Tab navigation
+                document.querySelectorAll('[data-tab]').forEach(tab => {
+                    tab.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        this.switchTab(e.target.dataset.tab);
+                    });
+                });
+
+                // Refresh button
+                document.getElementById('refreshDevices').addEventListener('click', () => {
+                    this.loadDevices();
+                });
+
+                // Start test form
+                document.getElementById('startTestForm').addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    this.startTest();
+                });
+
+                // Export results
+                document.getElementById('exportResults').addEventListener('click', () => {
+                    this.exportResults();
+                });
+            }
+
+            setupSocket() {
+                this.socket.on('connect', () => {
+                    console.log('Connected to server');
+                });
+
+                this.socket.on('test_update', (data) => {
+                    this.handleTestUpdate(data);
+                });
+
+                this.socket.on('device_status', (data) => {
+                    this.handleDeviceStatus(data);
+                });
+            }
+
+            async loadInitialData() {
+                await Promise.all([
+                    this.loadDevices(),
+                    this.loadScenarios(),
+                    this.loadTests()
+                ]);
+                this.updateDashboard();
+            }
+
+            async loadDevices() {
+                try {
+                    const response = await fetch('/api/devices');
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.devices = data.devices;
+                        this.renderDevices();
+                        this.updateDeviceSelects();
+                    } else {
+                        this.showError('Failed to load devices: ' + data.error);
+                    }
+                } catch (error) {
+                    this.showError('Error loading devices: ' + error.message);
+                }
+            }
+
+            async loadScenarios() {
+                try {
+                    const response = await fetch('/api/scenarios');
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.scenarios = data.scenarios;
+                        this.renderScenarios();
+                        this.updateScenarioSelect();
+                    } else {
+                        this.showError('Failed to load scenarios: ' + data.error);
+                    }
+                } catch (error) {
+                    this.showError('Error loading scenarios: ' + error.message);
+                }
+            }
+
+            async loadTests() {
+                try {
+                    const response = await fetch('/api/tests');
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.tests = data.tests;
+                        this.renderTests();
+                        this.renderTestResults();
+                    } else {
+                        this.showError('Failed to load tests: ' + data.error);
+                    }
+                } catch (error) {
+                    this.showError('Error loading tests: ' + error.message);
+                }
+            }
+
+            switchTab(tabName) {
+                // Update active nav item
+                document.querySelectorAll('.nav-link').forEach(link => {
+                    link.classList.remove('active');
+                });
+                document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+                // Show selected tab content
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.remove('active');
+                    content.style.display = 'none';
+                });
+                const activeTab = document.getElementById(`${tabName}-tab`);
+                if (activeTab) {
+                    activeTab.classList.add('active');
+                    activeTab.style.display = 'block';
+                }
+            }
+
+            renderDevices() {
+                const container = document.getElementById('devicesContainer');
+                const dashboardContainer = document.getElementById('dashboardDevices');
+                
+                if (this.devices.length === 0) {
+                    container.innerHTML = `
+                        <div class="col-12 text-center">
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i>
+                                No iOS devices found. Make sure devices are connected and trusted.
+                            </div>
+                        </div>
+                    `;
+                    dashboardContainer.innerHTML = '<p class="text-muted">No devices connected</p>';
+                    return;
+                }
+
+                // Render device cards
+                container.innerHTML = this.devices.map(device => `
+                    <div class="col-md-4 mb-3">
+                        <div class="card device-card" data-udid="${device.udid}">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="bi bi-phone"></i>
+                                    ${device.name}
+                                </h5>
+                                <p class="card-text">
+                                    <strong>Model:</strong> ${device.model || 'Unknown'}<br>
+                                    <strong>iOS:</strong> ${device.version || 'Unknown'}<br>
+                                    <strong>Battery:</strong> 
+                                    ${device.battery_level ? `${device.battery_level}%` : 'N/A'}
+                                    ${this.renderBatteryLevel(device.battery_level)}
+                                </p>
+                                <small class="text-muted">UDID: ${device.udid.substring(0, 16)}...</small>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+
+                // Render dashboard devices
+                dashboardContainer.innerHTML = this.devices.map(device => `
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div>
+                            <strong>${device.name}</strong><br>
+                            <small class="text-muted">${device.model}</small>
+                        </div>
+                        <div>
+                            ${device.battery_level ? `${device.battery_level}%` : 'N/A'}
+                            ${this.renderBatteryLevel(device.battery_level)}
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            renderBatteryLevel(level) {
+                if (!level) return '';
+                
+                let color;
+                if (level > 50) {
+                    color = '#28a745';
+                } else if (level > 20) {
+                    color = '#ffc107';
+                } else {
+                    color = '#dc3545';
+                }
+                
+                return `
+                    <div class="battery-level">
+                        <div class="battery-fill" style="width: ${level}%; background-color: ${color};"></div>
+                    </div>
+                `;
+            }
+
+            updateDashboard() {
+                document.getElementById('deviceCount').textContent = this.devices.length;
+                
+                const activeTests = this.tests.filter(test => test.status === 'running');
+                const completedTests = this.tests.filter(test => test.status === 'completed');
+                const failedTests = this.tests.filter(test => test.status === 'failed');
+                
+                document.getElementById('activeTestCount').textContent = activeTests.length;
+                document.getElementById('completedTestCount').textContent = completedTests.length;
+                document.getElementById('failedTestCount').textContent = failedTests.length;
+            }
+
+            showError(message) {
+                console.error(message);
+                // You could implement a toast notification system here
+                alert(message);
+            }
+
+            // Additional methods would be implemented here for:
+            // - updateDeviceSelects()
+            // - renderScenarios()
+            // - updateScenarioSelect()
+            // - startTest()
+            // - renderTests()
+            // - renderTestResults()
+            // - handleTestUpdate()
+            // - handleDeviceStatus()
+            // - exportResults()
+        }
+
+        // Initialize the app when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            window.app = new BatteryTesterApp();
+        });
+    </script>
+
+    <style>
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</body>
+</html>
