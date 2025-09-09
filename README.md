@@ -1,5 +1,18 @@
 # iOS Battery Drain Testing Utility
 
+A comprehensive Python utility for testing battery drain on iOS apps using real devices. Features **professional-grade Instruments integration**, **WiFi debugging support**, and **advanced validation systems** for accurate battery consumption measurements.
+
+## ✨ Key Features
+
+- **🔬 Instruments Profiling**: Native Apple Instruments integration for professional energy analysis
+- **📡 WiFi Connection Support**: Eliminate charging interference with wireless device connections
+- **📱 App-Specific Monitoring**: Target specific iOS apps for focused battery drain analysis
+- **⚡ Charging Interference Detection**: Smart detection and handling of USB charging interference
+- **🔋 Real Battery Capacity**: Device-specific battery capacity detection (mAh) with percentage conversion
+- **📊 Hybrid Monitoring**: Real-time battery tracking + Instruments profiling for comprehensive analysis
+- **🎯 Validation Framework**: Cross-validation with confidence levels and benchmark comparisons
+- **💾 Advanced Export**: Detailed JSON reports with trace files and energy analysis Drain Testing Utility
+
 A comprehensive Python utility for testing battery drain on iOS apps using real devices. The utility provides both command-line and web-based interfaces for monitoring battery consumption with support for **app-specific testing** and **charging control guidance**.
 
 ## ✨ Key Features
@@ -15,9 +28,10 @@ A comprehensive Python utility for testing battery drain on iOS apps using real 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- macOS with Xcode Command Line Tools installed
-- iOS device connected via USB with developer trust enabled
-- Python 3.7+ with `click` and `rich` libraries
+- macOS with Xcode Command Line Tools installed  
+- iOS device with Developer Trust enabled
+- Python 3.7+ with dependencies
+- libimobiledevice tools installed
 
 ### Installation
 ```bash
@@ -27,351 +41,276 @@ cd ios-battery-tests
 # Install Python dependencies
 pip install click rich
 
-# Set up system dependencies (libimobiledevice)
+# Set up system dependencies (libimobiledevice + Instruments)
 python setup_dependencies.py
 ```
 
-### Basic Usage
+### Connection Options
 
-#### 1. List Connected Devices
+#### USB Connection (Basic Testing)
 ```bash
-python simple_tester.py devices
+# Check USB-connected devices
+python instruments_tester.py devices
 ```
 
-#### 2. List Installed Apps
+#### WiFi Connection (Recommended for Clean Testing)
 ```bash
-python simple_tester.py apps
+# Enable WiFi debugging on your iOS device:
+# Settings → Privacy & Security → Developer → Wireless Debugging → ON
+# Connect to same WiFi network as your Mac
+
+# Check WiFi-connected devices
+python instruments_tester.py devices
 ```
 
-#### 3. Quick Battery Monitoring (5 minutes)
+### Available Tools
+
+#### 1. **instruments_tester.py** (Professional Grade)
+- Instruments profiling integration
+- WiFi debugging support  
+- Hybrid monitoring with validation
+- Energy analysis and trace files
+
+#### 2. **ultimate_battery_tester.py** (Comprehensive)
+- Multiple battery detection methods
+- Charging compensation algorithms
+- Advanced validation framework
+
+#### 3. **simple_tester.py** (Basic Testing)
+- Quick battery monitoring
+- App-specific testing
+- Basic reporting
+
+### Quick Commands
+
+#### List Devices and Apps
 ```bash
-python simple_tester.py monitor --duration 5
+python instruments_tester.py devices
+python instruments_tester.py list-apps
 ```
 
-#### 4. App-Specific Battery Test (30 minutes)
+#### Basic Monitoring
 ```bash
-python simple_tester.py app_test --app "YouTube" --duration 30
+python instruments_tester.py monitor --duration 5
 ```
 
-#### 5. Comprehensive Battery Test with Custom Settings
+#### App-Specific Test with Instruments
 ```bash
-python simple_tester.py test --app "Instagram" --duration 60 --interval 30
+python instruments_tester.py app-test --app "com.walmart.stores.allspark.beta" --duration 10
 ```
 
-## 📋 Available Commands
+#### Hybrid Test (Real-time + Instruments)
+```bash
+python instruments_tester.py hybrid-test --app "com.walmart.stores.allspark.beta" --duration 15
+```
 
-| Command | Description | Key Options |
-|---------|-------------|-------------|
-| `devices` | List connected iOS devices | - |
-| `apps` | Show all installed apps | - |
-| `monitor` | Real-time battery monitoring | `--app`, `--duration` |
-| `test` | Standard battery drain test | `--app`, `--duration`, `--interval` |
-| `app_test` | Comprehensive app-focused test | `--app` (required), `--duration` |
+#### Validation Test with Confidence Analysis
+```bash
+python instruments_tester.py validate-test --app "com.walmart.stores.allspark.beta" --duration 10
+```
 
-### Command Options
+## 📋 Advanced Features
 
-- `--udid`: Target specific device by UDID (partial match supported)
-- `--app, -a`: App name or bundle ID to monitor (e.g., "YouTube", "com.google.ios.youtube")
-- `--duration, -d`: Test duration in minutes (default varies by command)
-- `--interval, -i`: Reading interval in seconds (default: 30-60s)
-- `--no-charging-check`: Skip charging control instructions
-- `--no-charging-check`: Skip charging control instructions
+### WiFi Debugging Setup
+For the most accurate battery testing without charging interference:
 
-## 🔋 Charging Control for Accurate Testing
+1. **Enable on iOS Device**:
+   - Settings → Privacy & Security → Developer → Wireless Debugging → ON
+   - Connect device to same WiFi network as your Mac
 
-For precise battery drain measurements, the utility provides comprehensive charging control instructions:
+2. **Test WiFi Connection**:
+   ```bash
+   # Check for network devices
+   idevice_id -n
+   
+   # Should show your device UDID if WiFi debugging is working
+   ```
 
-### Before Testing:
-1. **🔌 Keep USB connected** for device communication
-2. **⚙️ Disable "Optimized Battery Charging"** in Settings → Battery → Battery Health
-3. **🔋 Charge to desired starting level** (90-95% recommended)
-4. **🚫 Unplug USB cable** to stop charging before starting test
+3. **Run Tests Over WiFi**:
+   ```bash
+   # All tools automatically detect WiFi vs USB connections
+   python instruments_tester.py app-test --app "Fortnite" --duration 10
+   ```
 
-### During Testing:
-- **📱 Keep target app active** and in use
-- **🚫 Do not reconnect USB** cable
-- **⚡ Monitor real-time progress** via the utility
+### Instruments Integration
 
-### After Testing:
-- **🔌 Reconnect USB** to resume charging
-- **⚙️ Re-enable charging optimizations** if desired
+#### Supported Templates
+- **Activity Monitor**: Comprehensive energy profiling (recommended)
+- **CPU Profiler**: App performance analysis 
+- **System Trace**: Low-level system monitoring
 
-## 📊 Test Results & Analytics
+#### Trace File Analysis
+```bash
+# Run test with trace export
+python instruments_tester.py app-test --app "TikTok" --duration 15
 
-### Standard Metrics
-- **Initial/Final Battery Levels**: Start and end percentages
-- **Total Drain**: Battery consumed during test period  
-- **Drain Rate**: Percentage per hour consumption rate
-- **Charging Detection**: Warnings if charging occurred during test
+# Trace files saved to: ./Traces/
+# JSON reports include parsed energy data
+```
 
-### Advanced Analytics (app_test command)
-- **Trend Analysis**: Early vs. late period drain comparison
-- **App Metadata**: Version, bundle ID, and display name
-- **Device Information**: iOS version, model, and device name
-- **Test Conditions**: Duration, intervals, and initial charging state
+### Charging Interference Handling
 
-### Sample Output
+#### Problem Detection
+```bash
+# Check battery status and charging state
+python instruments_tester.py devices --verbose
+
+# Look for:
+# - BatteryIsCharging: true/false
+# - FullyCharged: true/false  
+# - ExternalConnected: true/false
+```
+
+#### Solutions
+1. **WiFi Testing**: Use wireless connection to eliminate USB charging
+2. **Partial Battery**: Start tests below 100% to allow actual drain
+3. **Charging Compensation**: Tools automatically detect and compensate for trickle charging
+
+### Validation Framework
+
+#### Confidence Analysis
+```bash
+python instruments_tester.py validate-test --app "YouTube" --duration 10
+```
+
+Provides:
+- **Confidence Level**: HIGH/MEDIUM/LOW based on measurement quality
+- **Cross-validation**: Multiple detection methods compared
+- **Benchmark Comparison**: Against typical app power consumption patterns
+- **Range Analysis**: Expected vs actual consumption validation
+
+#### Energy Conversion
+- **mAh to Percentage**: Device-specific battery capacity detection
+- **Rate Calculations**: Per-hour consumption rates  
+- **Efficiency Metrics**: Energy per minute, per interaction
+
+## � Test Results & Energy Analysis
+
+### Real-time Monitoring
+- **Battery Level Tracking**: Percentage with decimal precision
+- **Charging State Detection**: USB charging interference warnings
+- **App Status Monitoring**: Target app activity and state
+- **Device Information**: Hardware details and capacity
+
+### Instruments Profiling Results
 ```json
 {
-  "readings": [
+  "energy_analysis": {
+    "consumption_mah": 6.0,
+    "consumption_percentage": 0.183,
+    "rate_per_hour_mah": 72.0,
+    "rate_per_hour_percentage": 2.2,
+    "device_capacity_mah": 3274,
+    "confidence": "HIGH",
+    "method": "instruments_activity_monitor"
+  },
+  "real_time_readings": [
     {
-      "timestamp": "2025-09-05T16:45:00.000000",
-      "level": 95,
+      "timestamp": "2025-01-09T16:04:42.123456",
+      "level": 99.0,
       "charging": false,
-      "elapsed_minutes": 0,
-      "monitored_app": {
-        "bundle_id": "com.google.ios.youtube", 
-        "display_name": "YouTube"
-      }
+      "app_active": true,
+      "elapsed_minutes": 0
     }
   ],
-  "initial_level": 95,
-  "final_level": 85,
-  "total_drain": 10,
-  "drain_rate_per_hour": 20.0,
-  "app_monitored": {...},
-  "charging_detected": false
+  "validation": {
+    "confidence_level": "HIGH",
+    "cross_validation": true,
+    "expected_range_mah": [2.0, 15.0],
+    "measured_in_range": true
+  }
 }
 ```
+
+### Charging Interference Detection
+```json
+{
+  "charging_analysis": {
+    "charging_detected": false,
+    "trickle_charge_detected": false,
+    "external_connected": false,
+    "battery_full": false,
+    "interference_level": "NONE"
+  }
+}
 ```
 
-### Python Installation
+### Energy Metrics
+- **Consumption (mAh)**: Actual milliamp-hour usage
+- **Consumption (%)**: Battery percentage equivalent  
+- **Rate per Hour**: Projected hourly consumption
+- **Efficiency**: Energy per app interaction/minute
+- **Device Capacity**: Hardware battery capacity (mAh)
+## 🛠️ Tool Comparison
 
+| Tool | Best For | Key Features |
+|------|----------|--------------|
+| **instruments_tester.py** | Professional testing | Instruments integration, WiFi support, validation framework |
+| **ultimate_battery_tester.py** | Comprehensive analysis | Multiple detection methods, charging compensation |
+| **simple_tester.py** | Quick testing | Basic monitoring, easy setup |
+
+### instruments_tester.py Commands
+
+| Command | Description | Usage |
+|---------|-------------|-------|
+| `devices` | List USB/WiFi devices | `python instruments_tester.py devices` |
+| `list-apps` | Show installed apps | `python instruments_tester.py list-apps` |
+| `monitor` | Real-time monitoring | `--duration 5` |
+| `app-test` | App-specific test | `--app "com.walmart.stores.allspark.beta" --duration 10` |
+| `hybrid-test` | Real-time + Instruments | `--app "com.walmart.stores.allspark.beta" --duration 15` |
+| `profile` | Pure Instruments profiling | `--app "com.walmart.stores.allspark.beta" --duration 5` |
+| `validate-test` | Validation with confidence | `--app "com.walmart.stores.allspark.beta" --duration 10` |
+| `compare-test` | Baseline vs app testing | `--app "com.walmart.stores.allspark.beta" --duration 10` |
+
+## 🔧 Troubleshooting
+
+### WiFi Connection Issues
 ```bash
-# Clone the repository
-git clone https://github.com/your-repo/ios-battery-tests.git
-cd ios-battery-tests
+# Check WiFi debugging status
+idevice_id -n
 
-# Install dependencies
-pip install -e .
-
-# Or install in development mode
-pip install -e ."[dev]"
+# If empty, enable on iOS device:
+# Settings → Privacy & Security → Developer → Wireless Debugging
 ```
 
-## Usage
-
-### Command Line Interface
-
-#### List Connected Devices
+### Charging Interference
 ```bash
-ios-battery-test devices
+# Check battery status
+ideviceinfo -q com.apple.mobile.battery
+
+# Look for:
+# BatteryIsCharging: false (should be false for clean testing)
+# ExternalConnected: false (use WiFi to avoid)
 ```
 
-#### Monitor Battery Level
+### Instruments Issues
 ```bash
-ios-battery-test monitor --udid <device_udid> --duration 60 --interval 30
+# Check Instruments availability
+xcrun xctrace list devices
+
+# Verify templates
+xcrun xctrace list templates
+
+# Check trace directory permissions
+ls -la ./Traces/
 ```
 
-#### List Available Test Scenarios
-```bash
-ios-battery-test scenarios
-```
+### Common Error Solutions
 
-#### Run a Battery Drain Test
-```bash
-ios-battery-test test --udid <device_udid> --scenario "Idle Test" --wait --output results.json
-```
+1. **"No devices found"**
+   - USB: Check `idevice_id -l`
+   - WiFi: Enable wireless debugging, check `idevice_id -n`
 
-#### View Test Results
-```bash
-ios-battery-test results --test-id <test_id>
-```
+2. **"App not found"**
+   - Use exact app name: `python instruments_tester.py list-apps`
+   - Try bundle ID instead of display name
 
-#### List Installed Apps
-```bash
-ios-battery-test apps --udid <device_udid>
-```
+3. **"Charging interference detected"**
+   - Switch to WiFi connection
+   - Start test below 100% battery
+   - Use validation framework for compensation
 
-### Web Interface
-
-#### Start the Web Server
-```bash
-# Development server
-python -m ios_battery_tester.web.app
-
-# Or using the entry point (if installed)
-ios-battery-web
-```
-
-#### Access the Dashboard
-Open your browser and navigate to `http://localhost:5000`
-
-The web interface provides:
-- **Dashboard**: Overview of connected devices and test statistics
-- **Devices**: Device discovery and management
-- **Tests**: Start new tests and monitor active ones
-- **Results**: View and analyze test results with interactive charts
-
-## Test Scenarios
-
-### Built-in Scenarios
-
-1. **Idle Test** (60 minutes)
-   - Device idle with screen off
-   - Measures baseline battery drain
-
-2. **Screen On Test** (30 minutes)
-   - Screen on at maximum brightness
-   - Tests display power consumption
-
-3. **App Usage Test** (45 minutes)
-   - Specific app interaction simulation
-   - Measures app-specific battery usage
-
-4. **Video Playback Test** (120 minutes)
-   - Continuous video playback
-   - Tests media consumption impact
-
-5. **Gaming Test** (90 minutes)
-   - Intensive gaming simulation
-   - High-performance battery testing
-
-### Custom Scenarios
-
-You can create custom test scenarios by extending the `TestScenario` class or using the web interface.
-
-## API Reference
-
-The web interface exposes a REST API:
-
-### Endpoints
-
-- `GET /api/devices` - List connected devices
-- `GET /api/devices/{udid}` - Get device details
-- `GET /api/devices/{udid}/apps` - Get installed apps
-- `GET /api/scenarios` - List test scenarios
-- `POST /api/tests` - Start a new test
-- `GET /api/tests` - List all tests
-- `GET /api/tests/{test_id}` - Get test details
-- `DELETE /api/tests/{test_id}` - Stop a running test
-- `GET /api/tests/export` - Export test results
-
-### WebSocket Events
-
-Real-time updates via Socket.IO:
-- `test_update` - Test status changes
-- `device_status` - Device connection status
-- `battery_reading` - Real-time battery data
-
-## Configuration
-
-### Environment Variables
-
-```bash
-# Web server configuration
-FLASK_ENV=development
-FLASK_PORT=5000
-FLASK_HOST=0.0.0.0
-
-# Battery monitoring
-BATTERY_MONITOR_INTERVAL=30  # seconds
-TEST_DATA_RETENTION_DAYS=30
-```
-
-## Development
-
-### Project Structure
-```
-ios_battery_tester/
-├── __init__.py
-├── cli.py                 # Command line interface
-├── core/
-│   ├── __init__.py
-│   ├── device_manager.py  # iOS device management
-│   ├── battery_monitor.py # Battery monitoring
-│   ├── test_runner.py     # Test execution
-│   └── exceptions.py      # Custom exceptions
-└── web/
-    ├── __init__.py
-    ├── app.py            # Flask web application
-    └── templates/
-        └── index.html    # Web interface
-```
-
-### Running Tests
-
-```bash
-pytest
-```
-
-### Code Quality
-
-```bash
-# Format code
-black ios_battery_tester/
-
-# Sort imports
-isort ios_battery_tester/
-
-# Lint
-flake8 ios_battery_tester/
-
-# Type checking
-mypy ios_battery_tester/
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Device Not Found**
-   - Ensure device is connected via USB
-   - Trust the computer on your iOS device
-   - Check if `idevice_id -l` shows your device
-
-2. **Permission Denied**
-   - Make sure you have proper permissions for device access
-   - Try running with `sudo` if necessary (not recommended)
-
-3. **Battery Information Unavailable**
-   - Some battery metrics may not be available on all devices
-   - Ensure device is not in low power mode during testing
-
-4. **Web Interface Not Loading**
-   - Check if port 5000 is available
-   - Try accessing via `127.0.0.1:5000` instead of `localhost:5000`
-
-### Logging
-
-Enable verbose logging for debugging:
-
-```bash
-ios-battery-test --verbose <command>
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Run the test suite
-6. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details.
-
-## Acknowledgments
-
-- [pymobiledevice3](https://github.com/doronz88/pymobiledevice3) for iOS device communication
-- [libimobiledevice](https://libimobiledevice.org/) for low-level iOS protocols
-- Flask and Socket.IO for the web interface
-- Chart.js for data visualization
-
-## Support
-
-For issues and questions:
-1. Check the troubleshooting section above
-2. Search existing GitHub issues
-3. Create a new issue with detailed information
-
-## Roadmap
-
-- [ ] Support for wireless device connections
-- [ ] Advanced test scenario scripting
-- [ ] Machine learning-based battery prediction
-- [ ] Integration with CI/CD pipelines
-- [ ] Support for Android devices
-- [ ] Cloud-based test execution
+4. **"Instruments profiling failed"**
+   - Check Xcode Command Line Tools: `xcode-select --install`
+   - Verify device trust and developer mode
+   - Try different Instruments template
