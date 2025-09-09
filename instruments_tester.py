@@ -34,6 +34,16 @@ console = Console()
 NO_DEVICES_MSG = "[red]No devices found[/red]"
 DEFAULT_READING_INTERVAL = 10  # seconds
 
+# Output directory structure
+OUTPUT_DIR = Path("output")
+TRACES_DIR = OUTPUT_DIR / "traces"
+RESULTS_DIR = OUTPUT_DIR / "results"  
+EXPORTS_DIR = OUTPUT_DIR / "exports"
+
+# Ensure output directories exist
+for dir_path in [OUTPUT_DIR, TRACES_DIR, RESULTS_DIR, EXPORTS_DIR]:
+    dir_path.mkdir(exist_ok=True)
+
 def run_xcrun_command(cmd):
     """Run xcrun command and return parsed output."""
     try:
@@ -180,7 +190,7 @@ def monitor_battery_hybrid(device_id, duration_minutes=30, interval_seconds=30, 
     
     # Start Instruments profiling in background
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    trace_file = f"battery_profile_{timestamp}.trace"
+    trace_file = str(TRACES_DIR / f"battery_profile_{timestamp}.trace")
     
     console.print(f"[cyan]🔬 Starting Instruments Energy Log profiling...[/cyan]")
     
@@ -887,7 +897,8 @@ def parse_instruments_trace(trace_file, app_bundle_id=None):
             return None
         
         # Export table of contents first to see available data
-        toc_file = trace_file.replace(".trace", "_toc.xml")
+        trace_filename = Path(trace_file).stem
+        toc_file = str(EXPORTS_DIR / f"{trace_filename}_toc.xml")
         export_cmd = [
             "xcrun", "xctrace", "export",
             "--input", trace_file,
@@ -932,7 +943,7 @@ def parse_instruments_trace(trace_file, app_bundle_id=None):
             
             # Export process ledger data (contains energy usage)
             try:
-                process_data_file = trace_file.replace(".trace", "_process_ledger.xml")
+                process_data_file = str(EXPORTS_DIR / f"{trace_filename}_process_ledger.xml")
                 process_export_cmd = [
                     "xcrun", "xctrace", "export",
                     "--input", trace_file,
@@ -944,11 +955,11 @@ def parse_instruments_trace(trace_file, app_bundle_id=None):
                 if process_result.returncode == 0 and os.path.exists(process_data_file):
                     console.print(f"[dim]Analyzing process energy data...[/dim]")
                     
-                    # Parse process energy data
+                    # Parse process energy data with proper XML structure handling
                     process_tree = ET.parse(process_data_file)
                     process_root = process_tree.getroot()
                     
-                    # Look for app-specific energy data
+                    # Look for app-specific energy data in the xctrace export format
                     for row in process_root.findall(".//row"):
                         process_name = ""
                         cpu_time_ns = 0
@@ -956,34 +967,35 @@ def parse_instruments_trace(trace_file, app_bundle_id=None):
                         disk_writes = 0
                         disk_reads = 0
                         
-                        # Find the process element which contains both name and PID
+                        # Find the process element which contains the formatted name
                         process_elem = row.find(".//process")
                         if process_elem is not None:
                             process_name = process_elem.get("fmt", "")
                         
-                        # Extract CPU time and other metrics
-                        for elem in row.findall(".//*[@id]"):
-                            elem_id = elem.get("id")
-                            if elem.tag == "duration-on-core" and elem.text:
-                                try:
-                                    cpu_time_ns = float(elem.text)  # CPU time in nanoseconds
-                                except ValueError:
-                                    pass
-                            elif elem.tag == "event-count" and elem.text:
-                                try:
-                                    idle_wakeups = float(elem.text)
-                                except ValueError:
-                                    pass
-                            elif elem.tag == "size-in-bytes" and elem.text:
-                                try:
-                                    size_bytes = float(elem.text)
-                                    # Check if this is disk writes or reads based on position/context
-                                    if disk_writes == 0:
-                                        disk_writes = size_bytes
-                                    else:
-                                        disk_reads = size_bytes
-                                except ValueError:
-                                    pass
+                        # Extract CPU time (duration-on-core) - value is in nanoseconds
+                        duration_elem = row.find(".//duration-on-core")
+                        if duration_elem is not None and duration_elem.text:
+                            try:
+                                cpu_time_ns = float(duration_elem.text)
+                            except ValueError:
+                                pass
+                        
+                        # Extract idle wakeups (event-count)
+                        wakeup_elem = row.find(".//event-count")
+                        if wakeup_elem is not None and wakeup_elem.text:
+                            try:
+                                idle_wakeups = float(wakeup_elem.text)
+                            except ValueError:
+                                pass
+                        
+                        # Extract disk I/O (size-in-bytes elements)
+                        disk_elems = row.findall(".//size-in-bytes")
+                        if len(disk_elems) >= 2:
+                            try:
+                                disk_writes = float(disk_elems[0].text) if disk_elems[0].text else 0
+                                disk_reads = float(disk_elems[1].text) if disk_elems[1].text else 0
+                            except (ValueError, IndexError):
+                                pass
                         
                         # Calculate energy consumption from CPU time
                         if cpu_time_ns > 0:
@@ -1018,7 +1030,7 @@ def parse_instruments_trace(trace_file, app_bundle_id=None):
             if system_energy_mah < 0.1:  # Very low values indicate parsing failed
                 try:
                     # Export system monitoring data
-                    system_data_file = trace_file.replace(".trace", "_system_data.xml")
+                    system_data_file = str(EXPORTS_DIR / f"{trace_filename}_system_data.xml")
                     system_export_cmd = [
                         "xcrun", "xctrace", "export", 
                         "--input", trace_file,
@@ -1028,36 +1040,58 @@ def parse_instruments_trace(trace_file, app_bundle_id=None):
                     
                     system_result = subprocess.run(system_export_cmd, capture_output=True, text=True, timeout=60)
                     if system_result.returncode == 0 and os.path.exists(system_data_file):
-                        console.print(f"[dim]Using system monitoring data for estimation...[/dim]")
+                        console.print("[dim]Using system monitoring data for estimation...[/dim]")
                         
                         # Parse system data to estimate power consumption
                         system_tree = ET.parse(system_data_file)
                         system_root = system_tree.getroot()
                         
-                        # Look for CPU usage or other indicators
-                        total_cpu_seconds = 0
-                        for row in system_root.findall(".//row"):
-                            for col in row.findall("col"):
-                                if "cpu" in (col.get("name") or "").lower() and col.text:
-                                    try:
-                                        cpu_val = float(col.text)
-                                        total_cpu_seconds += cpu_val
-                                    except ValueError:
-                                        pass
+                        # Look for CPU usage or other system metrics in xctrace format
+                        total_cpu_usage = 0
+                        cpu_readings = 0
                         
-                        # Estimate power based on CPU usage (rough calculation)
-                        # Modern iPhone: ~1.5W idle, +2-4W per core at 100% CPU
-                        if total_cpu_seconds > 0:
-                            avg_cpu_usage = total_cpu_seconds / test_duration_seconds * 100
-                            base_power_w = 1.5  # Base system power
-                            cpu_power_w = (avg_cpu_usage / 100.0) * 2.0  # CPU power scaling
+                        # Parse CPU load percentages from system monitoring data
+                        for row in system_root.findall(".//row"):
+                            # Look for cpu-percent-loads elements which contain CPU usage
+                            cpu_elem = row.find(".//cpu-percent-loads")
+                            if cpu_elem is not None and cpu_elem.text:
+                                try:
+                                    cpu_percent = float(cpu_elem.text)
+                                    total_cpu_usage += cpu_percent
+                                    cpu_readings += 1
+                                except ValueError:
+                                    pass
+                        
+                        # Calculate average CPU usage over the test period
+                        if cpu_readings > 0:
+                            avg_cpu_usage = total_cpu_usage / cpu_readings
+                            console.print(f"[dim]Found {cpu_readings} CPU readings, average: {avg_cpu_usage:.1f}%[/dim]")
+                            
+                            # Calculate power estimate from CPU usage
+                            # iPhone power model: Base power + CPU scaling
+                            base_power_w = 2.0  # Base system power (screen on, radios, etc.)
+                            cpu_power_w = (avg_cpu_usage / 100.0) * 3.0  # CPU power scaling
                             total_power_w = base_power_w + cpu_power_w
                             
-                            # Convert to mAh for typical iPhone (3.7V, test duration in hours)
+                            # Convert to mAh (iPhone typical battery: 3.7V)
                             system_energy_mah = (total_power_w * test_duration_seconds / 3600) / 3.7 * 1000
-                            app_energy_mah = system_energy_mah * 0.3 if app_bundle_id else 0  # Estimate app portion
                             
-                            console.print(f"[dim]Estimated from CPU usage ({avg_cpu_usage:.1f}%): {system_energy_mah:.2f} mAh[/dim]")
+                            # Estimate app portion based on CPU usage level
+                            app_portion = 0.4 if avg_cpu_usage > 50 else 0.2  # Higher CPU = likely more app activity
+                            app_energy_mah = system_energy_mah * app_portion if app_bundle_id else 0
+                            
+                            console.print(f"[dim]Calculated from system CPU ({avg_cpu_usage:.1f}%): {system_energy_mah:.2f} mAh total[/dim]")
+                        else:
+                            # Fallback if no CPU data found
+                            console.print("[dim]No CPU data found in system monitoring, using process count estimate[/dim]")
+                            row_count = len(system_root.findall(".//row"))
+                            if row_count > 0:
+                                estimated_cpu = min(60.0, row_count * 1.5)  # Estimate from activity level
+                                base_power_w = 2.0
+                                cpu_power_w = (estimated_cpu / 100.0) * 3.0
+                                total_power_w = base_power_w + cpu_power_w
+                                system_energy_mah = (total_power_w * test_duration_seconds / 3600) / 3.7 * 1000
+                                app_energy_mah = system_energy_mah * 0.3 if app_bundle_id else 0
                         
                 except Exception as e:
                     console.print(f"[yellow]⚠️  Could not parse system data: {e}[/yellow]")
@@ -1248,7 +1282,7 @@ def compare_test(device, app, duration, interval):
     # Save comparison results
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     app_name = app.split('.')[-1] if app else "unknown"
-    comparison_file = f"battery_comparison_{app_name}_{timestamp}.json"
+    comparison_file = str(RESULTS_DIR / f"battery_comparison_{app_name}_{timestamp}.json")
     
     comparison_data = {
         "baseline_results": baseline_results,
@@ -1390,7 +1424,7 @@ def validate_test(device, app, duration):
     # Save comprehensive validation report
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     app_name = app.split('.')[-1] if app else "unknown"
-    validation_file = f"validation_report_{app_name}_{timestamp}.json"
+    validation_file = str(RESULTS_DIR / f"validation_report_{app_name}_{timestamp}.json")
     
     validation_report = {
         "device_info": {
@@ -1547,7 +1581,7 @@ def hybrid_test(device, app, duration, interval):
     # Save results
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     app_suffix = f"_{app.split('.')[-1]}" if app else ""
-    results_file = f"hybrid_battery_test{app_suffix}_{timestamp}.json"
+    results_file = str(RESULTS_DIR / f"hybrid_battery_test{app_suffix}_{timestamp}.json")
     
     with open(results_file, 'w') as f:
         json.dump(results, f, indent=2, default=str)
@@ -1713,7 +1747,7 @@ def app_test(device, app, duration, interval):
     # Save results with app name
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     app_name = app.split('.')[-1] if app else "unknown"
-    results_file = f"app_battery_test_{app_name}_{timestamp}.json"
+    results_file = str(RESULTS_DIR / f"app_battery_test_{app_name}_{timestamp}.json")
     
     with open(results_file, 'w') as f:
         json.dump(results, f, indent=2, default=str)
@@ -1885,7 +1919,7 @@ def app_test(device, app, duration, interval):
     # Save results with app name
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     app_name = app.split('.')[-1] if app else "unknown"
-    results_file = f"app_battery_test_{app_name}_{timestamp}.json"
+    results_file = str(RESULTS_DIR / f"app_battery_test_{app_name}_{timestamp}.json")
     
     with open(results_file, 'w') as f:
         json.dump(results, f, indent=2, default=str)
@@ -2026,7 +2060,7 @@ def compare_test(device, app, duration, interval):
     # Save comparison results
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     app_name = app.split('.')[-1] if app else "unknown"
-    comparison_file = f"battery_comparison_{app_name}_{timestamp}.json"
+    comparison_file = str(RESULTS_DIR / f"battery_comparison_{app_name}_{timestamp}.json")
     
     comparison_data = {
         "baseline_results": baseline_results,
