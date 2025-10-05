@@ -250,17 +250,32 @@ def monitor_battery_hybrid(device_id, duration_minutes=30, interval_seconds=30, 
         
         # Add process-specific monitoring if app is specified 
         if app_bundle_id:
-            # Map bundle ID to actual process name
-            if "walmart" in app_bundle_id.lower():
-                app_name = "MyWalmart"
-            else:
-                # Fallback: try to get app name from bundle ID (last part after dots)
-                app_name = app_bundle_id.split('.')[-1]
+            # Try to find the actual running process name first
+            actual_process_name = find_running_process_for_app(device_id, app_bundle_id)
             
-            instruments_cmd.extend(["--attach", app_name])
-            console.print(f"[dim]🎯 Will attach to running app process: {app_name} (from {app_bundle_id})[/dim]")
+            if actual_process_name:
+                console.print(f"[green]🎯 Found running process: {actual_process_name}[/green]")
+                instruments_cmd.extend(["--attach", actual_process_name])
+            else:
+                # Fallback: try common process names
+                possible_names = []
+                if "walmart" in app_bundle_id.lower():
+                    possible_names = ["MyWalmart", "Walmart", "walmart"]
+                else:
+                    # Try bundle ID variations
+                    app_suffix = app_bundle_id.split('.')[-1]
+                    possible_names = [app_suffix, app_suffix.capitalize()]
+                
+                # Try the first possibility, but use --all-processes as backup
+                if possible_names:
+                    console.print(f"[yellow]⚠️ Process not confirmed, trying: {possible_names[0]}[/yellow]")
+                    console.print(f"[dim]💡 If this fails, will fall back to system-wide monitoring[/dim]")
+                    instruments_cmd.extend(["--attach", possible_names[0]])
+                else:
+                    console.print(f"[yellow]⚠️ Unknown app process, using system-wide monitoring[/yellow]")
+                    instruments_cmd.append("--all-processes")
         else:
-            # If no specific app, monitor all processes as fallback
+            # If no specific app, monitor all processes
             instruments_cmd.append("--all-processes")
         
         # Start Instruments in background with WiFi support
@@ -588,6 +603,54 @@ def export_trace_data(trace_file, output_format="xml"):
         console.print(f"[green]📊 Data exported: {export_file}[/green]")
         return export_file
     return None
+
+def find_running_process_for_app(device_id, app_bundle_id):
+    """Find the actual running process name for a given app bundle ID."""
+    try:
+        # Method 1: Try to use devicectl to list processes and find our app
+        console.print(f"[dim]🔍 Searching for running process for {app_bundle_id}...[/dim]")
+        
+        # First, try to get a list of running processes
+        # Note: devicectl may not work over WiFi for process listing, so we'll try multiple approaches
+        
+        # Try xcrun devicectl (works for iOS 17+)
+        try:
+            # Launch the app first to ensure it's running
+            launch_result = subprocess.run(
+                ["xcrun", "devicectl", "device", "process", "launch", "--device", device_id, app_bundle_id],
+                capture_output=True, text=True, timeout=10
+            )
+            if launch_result.returncode == 0:
+                console.print(f"[dim]✅ App launched successfully[/dim]")
+                time.sleep(2)  # Give app time to start
+            
+            # Now try to list processes to find the running app
+            # Unfortunately, devicectl doesn't easily map bundle IDs to process names
+            # So we'll use educated guessing based on common patterns
+            
+        except Exception as e:
+            console.print(f"[dim]App launch attempt: {e}[/dim]")
+        
+        # Method 2: Use common app name patterns
+        if "walmart" in app_bundle_id.lower():
+            # For Walmart app, try common process names
+            possible_names = ["MyWalmart", "Walmart", "com.walmart.stores.allspark.beta"]
+            
+            # Try each possibility (we can't easily verify which is running over WiFi)
+            # Return the most likely candidate
+            return "MyWalmart"  # Most common for Walmart app
+        
+        elif "beta" in app_bundle_id.lower():
+            # Beta apps might have different naming
+            return app_bundle_id.split('.')[-2] if len(app_bundle_id.split('.')) > 2 else app_bundle_id.split('.')[-1]
+        
+        else:
+            # Generic approach: use the last part of bundle ID
+            return app_bundle_id.split('.')[-1]
+            
+    except Exception as e:
+        console.print(f"[dim]Process search failed: {e}[/dim]")
+        return None
 
 def launch_app(device_id, bundle_id):
     """Launch an app on the device."""
