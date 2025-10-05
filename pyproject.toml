@@ -54,15 +54,12 @@ dev = [
 ]
 
 [project.scripts]
-ios-battery-test = "ios_battery_tester.cli:main"
+ios-battery-test = "instruments_tester:main"
 
 [project.urls]
 Homepage = "https://github.com/example/ios-battery-tester"
 Repository = "https://github.com/example/ios-battery-tester"
 Issues = "https://github.com/example/ios-battery-tester/issues"
-
-[tool.setuptools]
-packages = ["ios_battery_tester"]
 
 [tool.black]
 line-length = 88

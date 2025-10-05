@@ -1,0 +1,25 @@
+{
+  "real_time_readings": [],
+  "instruments_trace": "output/traces/battery_profile_20251004_202432.trace",
+  "device_id": "00008020-001570CE0A28402E",
+  "app_monitored": "com.walmart.stores.allspark.beta",
+  "duration_minutes": 2,
+  "energy_analysis": {
+    "cpu_usage_samples": [],
+    "memory_usage_samples": [],
+    "network_activity": 0,
+    "app_active_time": 0,
+    "estimated_power_cost": 4.0,
+    "power_events": 0,
+    "app_running": false,
+    "connection_type": "wifi_only",
+    "estimation_method": "wifi_estimation",
+    "total_energy_cost": 4.0,
+    "app_energy_cost": 4.0,
+    "cpu_energy_cost": 2.4,
+    "gpu_energy_cost": 0.4,
+    "network_energy_cost": 0.4,
+    "display_energy_cost": 0.8,
+    "method": "system_logs_fallback"
+  }
+}
