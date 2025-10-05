@@ -99,13 +99,14 @@ def get_devices():
                                                        capture_output=True, text=True, timeout=3)
                             wifi_devices = wifi_result.stdout.strip().split('\n') if wifi_result.stdout.strip() else []
                             
-                            if udid in usb_devices:
-                                connection_type = "usb"
-                                instruments_compatible = True
-                            elif udid in wifi_devices:
+                            # Prefer WiFi connection over USB for wireless operation
+                            if udid in wifi_devices:
                                 connection_type = "wifi"
                                 is_wifi_only = True
-                                instruments_compatible = False  # Instruments typically needs USB
+                                instruments_compatible = True  # Modern Instruments supports WiFi
+                            elif udid in usb_devices:
+                                connection_type = "usb"
+                                instruments_compatible = True
                             elif current_section == "online":
                                 connection_type = "detected_online"
                                 instruments_compatible = True  # Assume USB if detected by xctrace as online
@@ -115,6 +116,18 @@ def get_devices():
                             if current_section == "online":
                                 connection_type = "assumed_usb"
                                 instruments_compatible = True
+                            # Even if offline, try to determine if device is accessible
+                            elif current_section == "offline":
+                                connection_type = "offline_detected"
+                                # Still try to check if device is accessible via idevice tools
+                                try:
+                                    test_result = subprocess.run(["ideviceinfo", "-u", udid, "-k", "DeviceName"], 
+                                                               capture_output=True, text=True, timeout=5)
+                                    if test_result.returncode == 0:
+                                        connection_type = "offline_but_accessible"
+                                        instruments_compatible = True  # Device is accessible, may work with Instruments
+                                except Exception:
+                                    pass
                         
                         device_info = {
                             "identifier": udid,
@@ -210,33 +223,95 @@ def monitor_battery_hybrid(device_id, duration_minutes=30, interval_seconds=30, 
         
         if instruments_compatible:
             instruments_available = True
-            console.print(f"[dim]✅ Device connected via {connection_type} - Instruments compatible[/dim]")
+            status_msg = {
+                "wifi": "✅ Device connected via WiFi - Instruments supported",
+                "usb": "✅ Device connected via USB - Instruments supported", 
+                "detected_online": "✅ Device detected online - Instruments supported",
+                "assumed_usb": "✅ Device assumed USB connected - Instruments supported",
+                "offline_but_accessible": "✅ Device accessible despite offline status - Attempting Instruments"
+            }.get(connection_type, f"✅ Device connected via {connection_type} - Instruments compatible")
+            console.print(f"[dim]{status_msg}[/dim]")
         else:
-            console.print(f"[yellow]⚠️  Device connected via {connection_type} - Instruments may not work (USB recommended)[/yellow]")
+            console.print(f"[yellow]⚠️  Device connected via {connection_type} - Instruments may not work[/yellow]")
     else:
         console.print("[yellow]⚠️  Could not detect device connection type[/yellow]")
     
     instruments_process = None
     if instruments_available:
-        # Use Activity Monitor template for comprehensive energy and CPU data
+        # Use Power Profiler for battery analysis and CPU Profiler for detailed CPU metrics
+        template = "Power Profiler"  # Primary template for battery and power analysis
         instruments_cmd = [
             "xcrun", "xctrace", "record",
-            "--template", "Activity Monitor",
+            "--template", template,
             "--device", device_id,
-            "--all-processes",  # Monitor all processes to capture app activity
             "--time-limit", f"{duration_minutes * 60}s",
             "--output", trace_file
         ]
         
-        # Start Instruments in background
+        # Add process-specific monitoring if app is specified 
+        if app_bundle_id:
+            # Map bundle ID to actual process name
+            if "walmart" in app_bundle_id.lower():
+                app_name = "MyWalmart"
+            else:
+                # Fallback: try to get app name from bundle ID (last part after dots)
+                app_name = app_bundle_id.split('.')[-1]
+            
+            instruments_cmd.extend(["--attach", app_name])
+            console.print(f"[dim]🎯 Will attach to running app process: {app_name} (from {app_bundle_id})[/dim]")
+        else:
+            # If no specific app, monitor all processes as fallback
+            instruments_cmd.append("--all-processes")
+        
+        # Start Instruments in background with WiFi support
         try:
-            console.print("[dim]📊 Starting Instruments Activity Monitor (for energy analysis)...[/dim]")
+            if app_bundle_id:
+                console.print(f"[dim]📊 Starting Instruments {template} for app: {app_bundle_id}[/dim]")
+            else:
+                console.print(f"[dim]📊 Starting Instruments {template} (system-wide monitoring)[/dim]")
+            
+            # Also prepare CPU Profiler command for detailed CPU analysis
+            cpu_trace_file = trace_file.replace('.trace', '_cpu.trace')
+            cpu_template = "CPU Profiler"
+            cpu_instruments_cmd = [
+                "xcrun", "xctrace", "record",
+                "--template", cpu_template,
+                "--device", device_id,
+                "--time-limit", f"{duration_minutes * 60}s",
+                "--output", cpu_trace_file
+            ]
+            
+            # Target the specific app process for CPU Profiler if specified
+            if app_bundle_id:
+                # Map bundle ID to actual process name
+                if "walmart" in app_bundle_id.lower():
+                    app_name = "MyWalmart"
+                else:
+                    app_name = app_bundle_id.split('.')[-1]
+                cpu_instruments_cmd.extend(["--attach", app_name])
+            else:
+                cpu_instruments_cmd.append("--all-processes")
+            
+            # Start primary Power Profiler
             instruments_process = subprocess.Popen(
                 instruments_cmd, 
                 stdout=subprocess.PIPE, 
                 stderr=subprocess.PIPE,
                 text=True
             )
+            
+            # Start secondary CPU Profiler (best effort)
+            cpu_instruments_process = None
+            try:
+                console.print(f"[dim]🔍 Also starting {cpu_template} for detailed CPU analysis[/dim]")
+                cpu_instruments_process = subprocess.Popen(
+                    cpu_instruments_cmd,
+                    stdout=subprocess.PIPE, 
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+            except Exception as e:
+                console.print(f"[yellow]⚠️ Could not start CPU Profiler: {e}[/yellow]")
             console.print("[dim]✅ Instruments profiling started successfully[/dim]")
         except Exception as e:
             console.print(f"[yellow]⚠️  Failed to start Instruments: {e}[/yellow]")
@@ -882,10 +957,10 @@ def get_app_power_metrics(device_id, app_bundle_id, duration_seconds=60, battery
             "power_events": 0
         }
 def parse_instruments_trace(trace_file, app_bundle_id=None):
-    """Parse Instruments trace file to extract CPU usage and estimate power consumption."""
+    """Parse Instruments Power Profiler trace file to extract battery usage and power consumption."""
     try:
         # Export trace table of contents to understand available data
-        console.print(f"[cyan]📊 Parsing Instruments Activity Monitor trace: {trace_file}[/cyan]")
+        console.print(f"[cyan]📊 Parsing Instruments Power Profiler trace: {trace_file}[/cyan]")
         
         # Wait a moment to ensure trace file is fully written
         import time
