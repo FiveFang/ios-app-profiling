@@ -65,21 +65,13 @@ python instruments_tester.py devices
 
 ### Available Tools
 
-#### 1. **instruments_tester.py** (Professional Grade)
-- Instruments profiling integration
-- WiFi debugging support  
-- Hybrid monitoring with validation
-- Energy analysis and trace files
-
-#### 2. **ultimate_battery_tester.py** (Comprehensive)
-- Multiple battery detection methods
-- Charging compensation algorithms
-- Advanced validation framework
-
-#### 3. **simple_tester.py** (Basic Testing)
-- Quick battery monitoring
-- App-specific testing
-- Basic reporting
+#### **instruments_tester.py** (Main Tool)
+- **Power Profiler & CPU Profiler** integration for professional energy analysis
+- **WiFi debugging support** to eliminate charging interference  
+- **App-specific process targeting** with `--attach MyWalmart` (no system-wide monitoring)
+- **Hybrid monitoring** with real-time battery tracking + Instruments profiling
+- **Advanced validation framework** with confidence levels and cross-validation
+- **Comprehensive trace files** and detailed JSON reports
 
 ### Quick Commands
 
@@ -241,13 +233,13 @@ Provides:
 - **Rate per Hour**: Projected hourly consumption
 - **Efficiency**: Energy per app interaction/minute
 - **Device Capacity**: Hardware battery capacity (mAh)
-## 🛠️ Tool Comparison
+## 🛠️ Current Implementation
 
-| Tool | Best For | Key Features |
-|------|----------|--------------|
-| **instruments_tester.py** | Professional testing | Instruments integration, WiFi support, validation framework |
-| **ultimate_battery_tester.py** | Comprehensive analysis | Multiple detection methods, charging compensation |
-| **simple_tester.py** | Quick testing | Basic monitoring, easy setup |
+**instruments_tester.py** is the main and only tool, featuring:
+- **Power Profiler + CPU Profiler** templates for comprehensive analysis
+- **Process-specific targeting** (e.g., `--attach MyWalmart`) instead of system-wide monitoring
+- **WiFi connection support** for wireless debugging without charging interference
+- **Professional validation framework** with confidence levels and cross-validation
 
 ### instruments_tester.py Commands
 
@@ -257,10 +249,16 @@ Provides:
 | `list-apps` | Show installed apps | `python instruments_tester.py list-apps` |
 | `monitor` | Real-time monitoring | `--duration 5` |
 | `app-test` | App-specific test | `--app "com.walmart.stores.allspark.beta" --duration 10` |
-| `hybrid-test` | Real-time + Instruments | `--app "com.walmart.stores.allspark.beta" --duration 15` |
+| `hybrid-test` | **Power Profiler + CPU Profiler** | `--app "com.walmart.stores.allspark.beta" --duration 15` |
 | `profile` | Pure Instruments profiling | `--app "com.walmart.stores.allspark.beta" --duration 5` |
 | `validate-test` | Validation with confidence | `--app "com.walmart.stores.allspark.beta" --duration 10` |
 | `compare-test` | Baseline vs app testing | `--app "com.walmart.stores.allspark.beta" --duration 10` |
+
+**Current Profiling Configuration:**
+- **Primary**: Power Profiler with `--attach MyWalmart` (targets only Walmart app process)
+- **Secondary**: CPU Profiler with `--attach MyWalmart` (detailed CPU analysis)
+- **No --all-processes**: Efficient monitoring of specific app only
+- **WiFi Compatible**: Works over wireless connections
 
 ## 🔧 Troubleshooting
 
@@ -372,3 +370,31 @@ Maintaining continuous screen interaction
 The 8.1% app share actually indicates the Walmart app is efficient - most energy went to system resources supporting the app rather than the app code itself.
 
 Bottom Line: These are accurate, realistic measurements showing heavy but normal e-commerce app usage patterns. Much better than the previous 1 mAh placeholder values!
+
+## 📁 Project Structure
+
+```
+ios-battery-tests/
+├── instruments_tester.py      # Main battery testing tool with Power/CPU Profiler
+├── setup_dependencies.py     # System dependency installer (libimobiledevice, Xcode tools)
+├── requirements.txt          # Python dependencies (click, rich)
+├── pyproject.toml           # Project configuration
+├── README.md                # This documentation
+├── .gitignore               # Git exclusions (traces, results, .DS_Store)
+├── output/                  # Generated during testing
+│   ├── traces/             # Instruments trace files (.trace)
+│   ├── results/            # JSON test results
+│   └── exports/            # Exported XML data
+└── venv/                   # Python virtual environment
+```
+
+### Key Files
+- **instruments_tester.py**: Main tool featuring Power Profiler + CPU Profiler with WiFi support
+- **setup_dependencies.py**: Installs libimobiledevice and system dependencies  
+- **output/**: All test results, traces, and exports are organized here
+
+### Recent Updates
+- ✅ **Cleaned up project**: Removed obsolete files and packages (3089 lines deleted)
+- ✅ **Power Profiler**: Switched from Time Profiler to Power Profiler + CPU Profiler
+- ✅ **Process targeting**: Uses `--attach MyWalmart` instead of `--all-processes`
+- ✅ **WiFi optimized**: Full wireless debugging support without charging interference
