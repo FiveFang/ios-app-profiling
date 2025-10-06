@@ -108,8 +108,11 @@ def get_devices():
                                 connection_type = "usb"
                                 instruments_compatible = True
                             elif current_section == "online":
-                                connection_type = "detected_online"
-                                instruments_compatible = True  # Assume USB if detected by xctrace as online
+                                # If device is detected as online by xctrace, it's accessible for Instruments
+                                # Modern xctrace can work with both USB and WiFi connections
+                                connection_type = "wifi"  # Most likely WiFi if not in USB list
+                                is_wifi_only = True
+                                instruments_compatible = True  # xctrace can use WiFi connections
                                 
                         except Exception:
                             # Fallback: assume USB if detected as online by xctrace
