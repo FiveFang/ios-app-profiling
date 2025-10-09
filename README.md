@@ -1,23 +1,18 @@
 # iOS Battery Drain Testing Utility
 
-A comprehensive Python utility for testing battery drain on iOS apps using real devices. Features **professional-grade Instruments integration**, **WiFi debugging support**, and **advanced validation systems** for accurate battery consumption measurements.
+A comprehensive Python utility for testing battery drain on iOS apps using real devices. Features **professional-grade Instruments integration**, **WiFi debugging support**, **device profiling file analysis**, and **advanced validation systems** for accurate battery consumption measurements.
 
 ## ✨ Key Features
 
-- **🔬 Instruments Profiling**: Native Apple Instruments integration for professional energy analysis
-- **📡 WiFi Connection Support**: Eliminate charging interference with wireless device connections
+- **🔬 Instruments Profiling**: Native Apple Instruments integration with BatteryUserTemplate for professional energy analysis
+- **📡 WiFi Connection Support**: Eliminate charging interference with wireless device connections  
 - **📱 App-Specific Monitoring**: Target specific iOS apps for focused battery drain analysis
 - **⚡ Charging Interference Detection**: Smart detection and handling of USB charging interference
 - **🔋 Real Battery Capacity**: Device-specific battery capacity detection (mAh) with percentage conversion
 - **📊 Hybrid Monitoring**: Real-time battery tracking + Instruments profiling for comprehensive analysis
 - **🎯 Validation Framework**: Cross-validation with confidence levels and benchmark comparisons
-- **💾 Advanced Export**: Detailed JSON reports with trace files and energy analysis Drain Testing Utility
-
-A comprehensive Python utility for testing battery drain on iOS apps using real devices. The utility provides both command-line and web-based interfaces for monitoring battery consumption with support for **app-specific testing** and **charging control guidance**.
-
-## ✨ Key Features
-
-- **� App-Specific Monitoring**: Target specific iOS apps for focused battery drain analysis
+- **� Device Profiling Parser**: Analyze .aar files created directly on iOS devices for on-device profiling support
+- **💾 Advanced Export**: Detailed JSON reports with trace files and energy analysis
 - **🔋 Charging Control**: Guided instructions for proper charging control during tests  
 - **📊 Real-time Monitoring**: Live battery level tracking with drain rate calculations
 - **🔍 Device Discovery**: Automatic iOS device detection and connection management
@@ -73,6 +68,14 @@ python instruments_tester.py devices
 - **Advanced validation framework** with confidence levels and cross-validation
 - **Comprehensive trace files** and detailed JSON reports
 
+#### **device_profiling_parser.py** (Device Profiling Parser)
+- **On-device profiling analysis** for .aar files created directly on iOS devices
+- **Multiple parsing methods** including Instruments export and binary analysis  
+- **Timing extraction** from profiling session metadata and filenames
+- **Energy estimation** with device-specific calculations and app targeting
+- **CLI interface** with scan, parse, and analyze commands
+- **Standalone operation** - works independently of main testing utility
+
 ### Quick Commands
 
 #### List Devices and Apps
@@ -98,6 +101,70 @@ python instruments_tester.py hybrid-test --app "com.walmart.stores.allspark.beta
 
 #### Validation Test with Confidence Analysis
 ```bash
+python instruments_tester.py validate --app "com.walmart.stores.allspark.beta" --duration 20
+```
+
+#### Device Profiling File Analysis
+```bash
+# Parse .aar files created on iOS devices
+python device_profiling_parser.py parse-aar PowerProfiler_25-10-04_185707_to_25-10-04_185729.aar
+
+# Scan directory for profiling files
+python device_profiling_parser.py scan
+
+# Analyze with detailed output
+python device_profiling_parser.py analyze PowerProfiler_file.aar --detailed
+```
+
+## 🔄 Complete Testing Workflow
+
+### Method 1: Live Profiling (Recommended)
+1. **Connect Device**: WiFi connection preferred to avoid charging interference
+2. **Launch App**: Open target app on device  
+3. **Run Test**: Use hybrid-test for comprehensive analysis
+4. **Review Results**: Analyze JSON reports and trace files
+
+### Method 2: Device Profiling Analysis  
+1. **Create Profile**: Use iOS device profiling tools to create .aar files
+2. **Transfer Files**: Move .aar files to Mac for analysis
+3. **Parse Data**: Use device profiling parser for energy analysis
+4. **Compare Results**: Cross-reference with live profiling data
+
+### Method 3: Comparative Analysis
+1. **Baseline Test**: Establish current app performance
+2. **Code Changes**: Implement battery optimizations  
+3. **Comparison Test**: Measure improvements with same test parameters
+4. **Validation**: Use confidence analysis to verify results
+
+## 📚 Documentation
+
+### Technical Documentation
+- **[CONFLUENCE_DOCUMENTATION.md](CONFLUENCE_DOCUMENTATION.md)**: Comprehensive technical guide covering architecture, Instruments integration, battery calculations, and troubleshooting
+- **[DEVICE_PROFILING_USAGE.md](DEVICE_PROFILING_USAGE.md)**: Device profiling parser usage guide with examples and workflows
+
+### Key Technical Concepts
+- **BatteryUserTemplate Integration**: Professional-grade energy profiling using Apple's native tools
+- **WiFi Device Detection**: Advanced device discovery supporting wireless debugging connections
+- **Hybrid Monitoring Approach**: Combines real-time battery tracking with Instruments profiling
+- **Device-Specific Calculations**: Automatic battery capacity detection for accurate percentage reporting
+- **Cross-Validation Framework**: Confidence analysis and benchmark comparisons for result verification
+
+### Architecture Overview
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 iOS Battery Testing Suite                   │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐ │
+│  │ instruments_    │  │ device_profiling│  │ Technical    │ │  
+│  │ tester.py       │  │ _parser.py      │  │ Documentation│ │
+│  │                 │  │                 │  │              │ │
+│  │ • Live Profiling│  │ • .aar Parsing  │  │ • Architecture│ │
+│  │ • WiFi Support  │  │ • Energy        │  │ • Calculations│ │
+│  │ • BatteryUser   │  │   Estimation    │  │ • Troubleshoot│ │
+│  │   Template      │  │ • CLI Interface │  │ • API Reference│ │
+│  └─────────────────┘  └─────────────────┘  └──────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
 python instruments_tester.py validate-test --app "com.walmart.stores.allspark.beta" --duration 10
 ```
 
@@ -375,9 +442,12 @@ Bottom Line: These are accurate, realistic measurements showing heavy but normal
 
 ```
 ios-battery-tests/
-├── instruments_tester.py      # Main battery testing tool with Power/CPU Profiler
-├── setup_dependencies.py     # System dependency installer (libimobiledevice, Xcode tools)
-├── requirements.txt          # Python dependencies (click, rich)
+├── instruments_tester.py          # Main battery testing tool with Instruments integration
+├── device_profiling_parser.py     # Standalone parser for iOS device-generated .aar files  
+├── setup_dependencies.py          # System dependency installer (libimobiledevice, Xcode tools)
+├── requirements.txt               # Python dependencies (click, rich)
+├── CONFLUENCE_DOCUMENTATION.md    # Comprehensive technical documentation
+├── DEVICE_PROFILING_USAGE.md      # Device profiling parser usage guide
 ├── pyproject.toml           # Project configuration
 ├── README.md                # This documentation
 ├── .gitignore               # Git exclusions (traces, results, .DS_Store)
