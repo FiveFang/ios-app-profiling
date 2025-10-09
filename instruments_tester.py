@@ -154,43 +154,105 @@ def get_devices():
 
 def get_device_battery_info(device_id):
     """Get battery info using fallback methods."""
-    # Method 1: Try libimobiledevice (works with WiFi)
+    # Check if device is connected via WiFi
+    is_wifi_device = False
     try:
+        # Get device connection info
         result = subprocess.run(
-            f"ideviceinfo -u {device_id} -q com.apple.mobile.battery", 
-            shell=True, capture_output=True, text=True
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            lines = result.stdout.strip().split('\n')
-            battery_info = {}
-            for line in lines:
-                if ':' in line:
-                    key, value = line.split(':', 1)
-                    battery_info[key.strip()] = value.strip()
-            
-            level = battery_info.get('BatteryCurrentCapacity')
-            charging = battery_info.get('BatteryIsCharging', 'false').lower() == 'true'
-            return {
-                'level': int(level) if level and level.isdigit() else None,
-                'charging': charging,
-                'method': 'libimobiledevice'
-            }
-    except:
-        pass
-    
-    # Method 2: Try xcrun devicectl (newer devices)
-    try:
-        result = subprocess.run(
-            f"xcrun devicectl device info battery --device {device_id}", 
-            shell=True, capture_output=True, text=True
+            ["xcrun", "devicectl", "list", "devices"],
+            capture_output=True, text=True, timeout=10
         )
         if result.returncode == 0:
-            # Parse devicectl battery output
-            return {'level': None, 'charging': False, 'method': 'xcrun_devicectl'}
+            for line in result.stdout.split('\n'):
+                if device_id in line and 'connected' in line.lower():
+                    is_wifi_device = True
+                    break
     except:
         pass
     
+    # Method 1: Try libimobiledevice (works with USB only)
+    if not is_wifi_device:
+        try:
+            result = subprocess.run(
+                f"ideviceinfo -u {device_id} -q com.apple.mobile.battery", 
+                shell=True, capture_output=True, text=True
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                lines = result.stdout.strip().split('\n')
+                battery_info = {}
+                for line in lines:
+                    if ':' in line:
+                        key, value = line.split(':', 1)
+                        battery_info[key.strip()] = value.strip()
+                
+                level = battery_info.get('BatteryCurrentCapacity')
+                charging = battery_info.get('BatteryIsCharging', 'false').lower() == 'true'
+                return {
+                    'level': int(level) if level and level.isdigit() else None,
+                    'charging': charging,
+                    'method': 'libimobiledevice'
+                }
+        except:
+            pass
+    
+    # Method 2: For WiFi devices, we cannot get real-time battery level
+    # Return a status indicating this limitation
+    if is_wifi_device:
+        return {
+            'level': None, 
+            'charging': None, 
+            'method': 'wifi_limitation',
+            'message': 'Real-time battery level not available for WiFi connections'
+        }
+    
     return {'level': None, 'charging': False, 'method': 'unavailable'}
+
+
+def get_device_battery_capacity(device_id):
+    """Get device battery capacity in mAh"""
+    try:
+        # Try to get device details using devicectl
+        result = subprocess.run(
+            ["xcrun", "devicectl", "device", "info", "details", "--device", device_id],
+            capture_output=True, text=True, timeout=10
+        )
+        
+        if result.returncode == 0:
+            # Parse devicectl output for device model info
+            marketing_name = None
+            
+            for line in result.stdout.split('\n'):
+                if 'marketingName:' in line:
+                    marketing_name = line.split(':', 1)[1].strip()
+                    break
+            
+            if marketing_name:
+                # Specific capacities for known devices
+                capacities = {
+                    'iPhone 16 Pro': 3582,
+                    'iPhone 16 Pro Max': 4685,
+                    'iPhone 16': 3561,
+                    'iPhone 16 Plus': 4674,
+                    'iPhone 15 Pro': 3274,
+                    'iPhone 15 Pro Max': 4422,
+                    'iPhone 15': 3349,
+                    'iPhone 15 Plus': 4383,
+                    'iPhone 14 Pro': 3200,
+                    'iPhone 14 Pro Max': 4323,
+                    'iPhone 14': 3279,
+                    'iPhone 14 Plus': 4325,
+                    'iPhone 13 Pro': 3095,
+                    'iPhone 13 Pro Max': 4352,
+                    'iPhone 13': 3240,
+                    'iPhone 13 mini': 2438,
+                }
+                
+                return capacities.get(marketing_name, 3582)  # Default to iPhone 16 Pro
+    
+    except Exception:
+        pass
+    
+    return 3582  # Default fallback capacity
 
 
 def monitor_battery_hybrid(device_id, duration_minutes=30, interval_seconds=30, app_bundle_id=None):
@@ -2094,7 +2156,8 @@ def app_test(device, app, duration, interval):
 
 @cli.command()
 @click.option('--device', '-d', help='Device UDID or name')
-def list_apps(device):
+@click.option('--json', 'output_json', is_flag=True, help='Output as JSON for API consumption')
+def list_apps(device, output_json):
     """List installed apps on device."""
     devices = get_devices()
     if not devices:
@@ -2115,32 +2178,100 @@ def list_apps(device):
     device_id = target_device.get("identifier")
     device_name = target_device.get("deviceProperties", {}).get("name", "Unknown")
     
-    console.print(f"[green]📱 Apps on {device_name}:[/green]")
+    if not output_json:
+        console.print(f"[green]📱 Apps on {device_name}:[/green]")
     
-    # Try to get apps using ideviceinstaller
-    apps = []
+    # First, get the CoreDevice identifier for devicectl
+    core_device_id = None
     try:
-        result = subprocess.run(
-            ["ideviceinstaller", "-u", device_id, "-l"],
-            capture_output=True, text=True, timeout=30
-        )
-        
-        if result.returncode == 0 and result.stdout:
+        # Map xcrun xctrace UDID to CoreDevice identifier
+        result = subprocess.run(["xcrun", "devicectl", "list", "devices"], 
+                              capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
             lines = result.stdout.strip().split('\n')
-            for line in lines[1:]:  # Skip header
-                if line.strip() and not line.startswith('CFBundleIdentifier'):
-                    parts = [p.strip('"') for p in line.split(', ')]
-                    if len(parts) >= 3:
-                        bundle_id = parts[0]
-                        version = parts[1] 
-                        display_name = parts[2]
-                        apps.append((display_name, bundle_id, version))
-                        
-    except Exception as e:
-        console.print(f"[yellow]Could not retrieve apps: {e}[/yellow]")
+            for line in lines:
+                if device_name in line or device_id[:8] in line:
+                    # Extract the CoreDevice identifier (UUID format)
+                    parts = line.split()
+                    for part in parts:
+                        if len(part) == 36 and '-' in part:  # UUID format
+                            core_device_id = part
+                            break
+                    if core_device_id:
+                        break
+    except Exception:
+        pass
+    
+    # Try to get apps using xcrun devicectl (works with WiFi)
+    apps = []
+    if core_device_id:
+        try:
+            result = subprocess.run(
+                ["xcrun", "devicectl", "device", "info", "apps", "--device", core_device_id],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            if result.returncode == 0 and result.stdout:
+                lines = result.stdout.strip().split('\n')
+                in_apps_section = False
+                for line in lines:
+                    if "Apps installed:" in line:
+                        in_apps_section = True
+                        continue
+                    elif in_apps_section and line.strip():
+                        # Skip header line
+                        if "Name" in line and "Bundle Identifier" in line:
+                            continue
+                        # Skip separator line
+                        if line.strip().startswith('---'):
+                            continue
+                        # Parse app line: "Name   Bundle Identifier   Version   Bundle Version"
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            name = parts[0]
+                            bundle_id = parts[1] 
+                            version = parts[2]
+                            apps.append((name, bundle_id, version))
+                            
+        except Exception as e:
+            console.print(f"[yellow]Could not retrieve apps using devicectl: {e}[/yellow]")
+    
+    # Fallback to ideviceinstaller for USB connections
+    if not apps:
+        try:
+            result = subprocess.run(
+                ["ideviceinstaller", "-u", device_id, "-l"],
+                capture_output=True, text=True, timeout=30
+            )
+            
+            if result.returncode == 0 and result.stdout:
+                lines = result.stdout.strip().split('\n')
+                for line in lines[1:]:  # Skip header
+                    if line.strip() and not line.startswith('CFBundleIdentifier'):
+                        parts = [p.strip('"') for p in line.split(', ')]
+                        if len(parts) >= 3:
+                            bundle_id = parts[0]
+                            version = parts[1] 
+                            display_name = parts[2]
+                            apps.append((display_name, bundle_id, version))
+                            
+        except Exception as e:
+            console.print(f"[yellow]Could not retrieve apps using ideviceinstaller: {e}[/yellow]")
     
     # Display results
-    if apps:
+    if output_json:
+        # JSON output for API consumption
+        json_apps = []
+        for display_name, bundle_id, version in sorted(apps, key=lambda x: x[0].lower()):
+            json_apps.append({
+                'name': display_name,
+                'bundle_id': bundle_id,
+                'version': version
+            })
+        
+        import json
+        print(json.dumps({'success': True, 'apps': json_apps}))
+    elif apps:
         table = Table(title=f"Apps on {device_name}")
         table.add_column("App Name", style="cyan")
         table.add_column("Bundle ID", style="magenta") 
@@ -2164,8 +2295,11 @@ def list_apps(device):
             console.print(f"• Test specific app: [dim]python instruments_tester.py app-test --app {sample_app}[/dim]")
             console.print(f"• Quick test: [dim]python instruments_tester.py hybrid-test --app {sample_app} --duration 10[/dim]")
     else:
-        console.print("[yellow]No apps found[/yellow]")
-        console.print("[dim]Try manually: ideviceinstaller -u DEVICE_ID -l[/dim]")
+        if output_json:
+            print('{"success": false, "apps": [], "error": "No apps found"}')
+        else:
+            console.print("[yellow]No apps found[/yellow]")
+            console.print("[dim]Try manually: ideviceinstaller -u DEVICE_ID -l[/dim]")
 
 @cli.command()
 @click.option('--device', '-d', help='Device UDID or name')

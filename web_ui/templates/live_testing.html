@@ -309,7 +309,7 @@
             const appList = document.getElementById('app-list');
             appList.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading apps...</div>';
             
-            fetch(`/api/apps/${selectedDevice.id}`)
+            fetch(`/api/apps/${selectedDevice.full_id}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success && data.apps.length > 0) {
@@ -372,7 +372,7 @@
             }
 
             const testConfig = {
-                device_id: selectedDevice.id,
+                device_id: selectedDevice.full_id,
                 device_name: selectedDevice.name,
                 app_bundle_id: selectedApp.bundle_id,
                 duration_minutes: parseInt(document.getElementById('test-duration').value),

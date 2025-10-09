@@ -455,24 +455,28 @@ class DeviceProfilingParser:
     def _get_device_capacity_by_id(self, device_id):
         """Get battery capacity for specific device ID"""
         try:
-            # Try devicectl first (works with WiFi)
+            # Try devicectl first (works with WiFi) - use details instead of battery subcommand
             result = subprocess.run(
-                ["xcrun", "devicectl", "device", "info", "battery", "--device", device_id],
+                ["xcrun", "devicectl", "device", "info", "details", "--device", device_id],
                 capture_output=True, text=True, timeout=10
             )
             
             if result.returncode == 0:
-                # Parse devicectl output for capacity info
+                # Parse devicectl output for device model info
+                product_type = None
+                marketing_name = None
+                
                 for line in result.stdout.split('\n'):
-                    if 'CurrentCapacity' in line or 'MaxCapacity' in line:
-                        # Extract device model from the output context
-                        model_result = subprocess.run(
-                            ["xcrun", "devicectl", "device", "info", "properties", "--device", device_id],
-                            capture_output=True, text=True, timeout=10
-                        )
-                        if model_result.returncode == 0:
-                            model = self._extract_device_model(model_result.stdout)
-                            return self._get_capacity_for_model(model)
+                    if 'productType:' in line:
+                        product_type = line.split(':')[1].strip()
+                    elif 'marketingName:' in line:
+                        marketing_name = line.split(':', 1)[1].strip()
+                
+                # Use marketing name first, then product type
+                if marketing_name:
+                    return self._get_capacity_for_marketing_name(marketing_name)
+                elif product_type:
+                    return self._get_capacity_for_product_type(product_type)
             
             # Fallback: Try ideviceinfo for USB devices
             result = subprocess.run(
@@ -517,6 +521,31 @@ class DeviceProfilingParser:
         elif 'iPad' in product_type:
             return 7538  # iPad average
         return 3582  # Default
+    
+    def _get_capacity_for_marketing_name(self, marketing_name):
+        """Get battery capacity based on marketing name"""
+        # Specific capacities for known devices
+        capacities = {
+            'iPhone 16 Pro': 3582,
+            'iPhone 16 Pro Max': 4685,
+            'iPhone 16': 3561,
+            'iPhone 16 Plus': 4674,
+            'iPhone 15 Pro': 3274,
+            'iPhone 15 Pro Max': 4422,
+            'iPhone 15': 3349,
+            'iPhone 15 Plus': 4383,
+            'iPhone 14 Pro': 3200,
+            'iPhone 14 Pro Max': 4323,
+            'iPhone 14': 3279,
+            'iPhone 14 Plus': 4325,
+            'iPhone 13 Pro': 3095,
+            'iPhone 13 Pro Max': 4352,
+            'iPhone 13': 3240,
+            'iPhone 13 mini': 2438,
+        }
+        
+        # Default to iPhone average if specific model not found
+        return capacities.get(marketing_name, 3582)
 
     def _save_results(self, results, output_path):
         """Save parsing results to JSON file"""
