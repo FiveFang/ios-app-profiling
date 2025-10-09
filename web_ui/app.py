@@ -85,10 +85,18 @@ def init_database():
             app_percentage REAL,
             device_capacity_mah INTEGER,
             status TEXT,
+            trace_file_path TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             results_json TEXT
         )
     ''')
+    
+    # Add trace_file_path column to existing tables if it doesn't exist
+    try:
+        cursor.execute('ALTER TABLE test_results ADD COLUMN trace_file_path TEXT')
+    except sqlite3.OperationalError:
+        # Column already exists
+        pass
     
     # File analysis table
     cursor.execute('''
@@ -332,8 +340,26 @@ def parse_test_results(stdout, device_id=None):
         'app_consumption_mah': 0,
         'total_percentage': 0,
         'app_percentage': 0,
-        'device_capacity_mah': device_capacity
+        'device_capacity_mah': device_capacity,
+        'trace_file_path': None
     }
+    
+    # Extract trace file path from CLI output
+    for line in stdout.split('\n'):
+        if '✅ Instruments trace created:' in line:
+            # Extract trace file path from line like: "✅ Instruments trace created: /path/to/trace.trace"
+            trace_path = line.split('✅ Instruments trace created:')[1].strip()
+            # Convert absolute path to relative path from web_ui directory
+            if trace_path.startswith('/'):
+                project_root = Path(__file__).parent.parent
+                try:
+                    trace_path = str(Path(trace_path).relative_to(project_root))
+                except ValueError:
+                    # If can't make relative, use absolute path
+                    pass
+            results['trace_file_path'] = trace_path
+            print(f"Found trace file: {trace_path}")
+            break
     
     # Check for JSON battery analysis in CLI output
     found_json_data = False
@@ -419,14 +445,14 @@ def save_test_results(test_id, config, results):
             INSERT INTO test_results (
                 test_id, test_type, device_name, app_bundle_id, duration_minutes,
                 total_consumption_mah, app_consumption_mah, total_percentage, app_percentage,
-                device_capacity_mah, status, results_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                device_capacity_mah, status, trace_file_path, results_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             test_id, config['test_type'], config['device_name'], config['app_bundle_id'],
             config['duration_minutes'], results['total_consumption_mah'],
             results['app_consumption_mah'], results['total_percentage'],
             results['app_percentage'], results['device_capacity_mah'],
-            'completed', json.dumps(results)
+            'completed', results.get('trace_file_path'), json.dumps(results)
         ))
         
         conn.commit()
@@ -511,6 +537,45 @@ def api_test_status(test_id):
     else:
         return jsonify({'success': False, 'error': 'Test not found'})
 
+@app.route('/api/download-trace/<test_id>')
+def api_download_trace(test_id):
+    """API endpoint to download trace files from live tests"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT trace_file_path, test_type, app_bundle_id FROM test_results WHERE test_id = ?', (test_id,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row or not row[0]:
+            return jsonify({'success': False, 'error': 'Trace file not found'}), 404
+        
+        trace_file_path = row[0]
+        test_type = row[1] or 'test'
+        app_name = (row[2] or 'app').split('.')[-1]
+        
+        # Build full path to trace file
+        project_root = Path(__file__).parent.parent
+        full_trace_path = project_root / trace_file_path
+        
+        if not full_trace_path.exists():
+            return jsonify({'success': False, 'error': 'Trace file does not exist on disk'}), 404
+        
+        # Create a friendly filename for download
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        download_filename = f"{test_type}_{app_name}_{timestamp}.trace"
+        
+        return send_file(
+            full_trace_path,
+            as_attachment=True,
+            download_name=download_filename,
+            mimetype='application/octet-stream'
+        )
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/historical-results')
 def api_historical_results():
     """API endpoint to get historical test results"""
@@ -526,7 +591,18 @@ def api_historical_results():
         ''')
         
         columns = [description[0] for description in cursor.description]
-        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        results = []
+        project_root = Path(__file__).parent.parent
+        
+        for row in cursor.fetchall():
+            result = dict(zip(columns, row))
+            # Check if trace file exists on disk
+            if result.get('trace_file_path'):
+                trace_path = project_root / result['trace_file_path']
+                result['has_trace_file'] = trace_path.exists()
+            else:
+                result['has_trace_file'] = False
+            results.append(result)
         
         # Get recent file analyses
         cursor.execute('''

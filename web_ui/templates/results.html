@@ -397,9 +397,14 @@
                     <td><strong>${(test.total_percentage || 0).toFixed(3)}%</strong></td>
                     <td><strong>${(test.app_percentage || 0).toFixed(3)}%</strong></td>
                     <td>
-                        <button class="btn btn-sm btn-outline-primary" onclick="showTestDetails('live', '${test.test_id}')">
+                        <button class="btn btn-sm btn-outline-primary me-1" onclick="showTestDetails('live', '${test.test_id}')">
                             <i class="fas fa-eye"></i>
                         </button>
+                        ${test.has_trace_file ? `
+                            <button class="btn btn-sm btn-success" onclick="downloadTraceFile('${test.test_id}')" title="Download Instruments Trace">
+                                <i class="fas fa-download"></i>
+                            </button>
+                        ` : ''}
                     </td>
                 </tr>
             `).join('');
@@ -505,6 +510,17 @@
 
             document.getElementById('modal-content').innerHTML = modalContent;
             new bootstrap.Modal(document.getElementById('detail-modal')).show();
+        }
+
+        // Download trace file
+        function downloadTraceFile(testId) {
+            const downloadUrl = `/api/download-trace/${testId}`;
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = '';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
     </script>
 </body>
