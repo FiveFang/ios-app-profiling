@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iOS Battery Testing - Results</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-light">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-battery-three-quarters me-2"></i>
+                iOS Battery Testing Suite
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/"><i class="fas fa-home me-1"></i>Dashboard</a>
+                <a class="nav-link" href="/devices"><i class="fas fa-mobile-alt me-1"></i>Devices</a>
+                <a class="nav-link" href="/live-testing"><i class="fas fa-play me-1"></i>Live Testing</a>
+                <a class="nav-link" href="/file-analysis"><i class="fas fa-file-upload me-1"></i>File Analysis</a>
+                <a class="nav-link active" href="/results"><i class="fas fa-chart-line me-1"></i>Results</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <h1 class="text-primary">
+                    <i class="fas fa-chart-line me-2"></i>
+                    Test Results & Analytics
+                </h1>
+                <p class="lead">Historical analysis and performance trends</p>
+            </div>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card text-center bg-primary text-white">
+                    <div class="card-body">
+                        <i class="fas fa-vial fa-2x mb-2"></i>
+                        <h4 id="total-tests">-</h4>
+                        <p class="mb-0">Total Tests</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center bg-success text-white">
+                    <div class="card-body">
+                        <i class="fas fa-file-alt fa-2x mb-2"></i>
+                        <h4 id="file-analyses">-</h4>
+                        <p class="mb-0">File Analyses</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center bg-info text-white">
+                    <div class="card-body">
+                        <i class="fas fa-percentage fa-2x mb-2"></i>
+                        <h4 id="avg-consumption">-</h4>
+                        <p class="mb-0">Avg Consumption</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card text-center bg-warning text-white">
+                    <div class="card-body">
+                        <i class="fas fa-clock fa-2x mb-2"></i>
+                        <h4 id="total-duration">-</h4>
+                        <p class="mb-0">Total Duration</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="row mb-4">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-line me-2"></i>
+                            Battery Consumption Trends
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="consumption-chart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-pie me-2"></i>
+                            Test Types Distribution
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="test-types-chart" width="300" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Tables -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">
+                                <i class="fas fa-table me-2"></i>
+                                Detailed Results
+                            </h5>
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-outline-primary btn-sm active" onclick="showLiveTests()">
+                                    Live Tests
+                                </button>
+                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="showFileAnalyses()">
+                                    File Analyses
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- Live Tests Table -->
+                        <div id="live-tests-table">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Device</th>
+                                            <th>App</th>
+                                            <th>Duration</th>
+                                            <th>Test Type</th>
+                                            <th>Total %</th>
+                                            <th>App %</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="live-tests-body">
+                                        <tr>
+                                            <td colspan="8" class="text-center text-muted">
+                                                <i class="fas fa-spinner fa-spin"></i>
+                                                Loading results...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- File Analyses Table -->
+                        <div id="file-analyses-table" style="display: none;">
+                            <div class="table-responsive">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Filename</th>
+                                            <th>File Size</th>
+                                            <th>Duration</th>
+                                            <th>Total %</th>
+                                            <th>App %</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="file-analyses-body">
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted">
+                                                <i class="fas fa-spinner fa-spin"></i>
+                                                Loading analyses...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div class="modal fade" id="detail-modal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Test Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="modal-content">
+                        <!-- Content will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let allData = null;
+        let consumptionChart = null;
+        let testTypesChart = null;
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAllResults();
+        });
+
+        // Load all results from API
+        function loadAllResults() {
+            fetch('/api/historical-results')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        allData = data;
+                        updateSummaryCards();
+                        updateCharts();
+                        updateLiveTestsTable();
+                        updateFileAnalysesTable();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading results:', error);
+                });
+        }
+
+        // Update summary cards
+        function updateSummaryCards() {
+            const liveTests = allData.test_results.length;
+            const fileAnalyses = allData.file_analyses.length;
+            
+            document.getElementById('total-tests').textContent = liveTests;
+            document.getElementById('file-analyses').textContent = fileAnalyses;
+
+            // Calculate average consumption
+            const allResults = [...allData.test_results, ...allData.file_analyses];
+            if (allResults.length > 0) {
+                const avgConsumption = allResults.reduce((sum, result) => 
+                    sum + (result.total_percentage || 0), 0) / allResults.length;
+                document.getElementById('avg-consumption').textContent = avgConsumption.toFixed(2) + '%';
+
+                // Calculate total duration
+                const totalDuration = allResults.reduce((sum, result) => 
+                    sum + (result.duration_minutes || 0), 0);
+                document.getElementById('total-duration').textContent = Math.round(totalDuration) + ' min';
+            } else {
+                document.getElementById('avg-consumption').textContent = 'N/A';
+                document.getElementById('total-duration').textContent = 'N/A';
+            }
+        }
+
+        // Update charts
+        function updateCharts() {
+            updateConsumptionChart();
+            updateTestTypesChart();
+        }
+
+        // Update consumption trends chart
+        function updateConsumptionChart() {
+            const ctx = document.getElementById('consumption-chart').getContext('2d');
+            
+            // Prepare data from recent results
+            const allResults = [...allData.test_results, ...allData.file_analyses]
+                .sort((a, b) => new Date(a.created_at || a.analyzed_at) - new Date(b.created_at || b.analyzed_at))
+                .slice(-20); // Last 20 results
+
+            const labels = allResults.map((result, index) => `Test ${index + 1}`);
+            const totalData = allResults.map(result => result.total_percentage || 0);
+            const appData = allResults.map(result => result.app_percentage || 0);
+
+            if (consumptionChart) {
+                consumptionChart.destroy();
+            }
+
+            consumptionChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Total Consumption (%)',
+                        data: totalData,
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        tension: 0.1
+                    }, {
+                        label: 'App Consumption (%)',
+                        data: appData,
+                        borderColor: 'rgb(255, 99, 132)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Battery Consumption Over Time'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Consumption (%)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update test types chart
+        function updateTestTypesChart() {
+            const ctx = document.getElementById('test-types-chart').getContext('2d');
+            
+            // Count test types
+            const testTypes = {};
+            allData.test_results.forEach(test => {
+                const type = test.test_type || 'Unknown';
+                testTypes[type] = (testTypes[type] || 0) + 1;
+            });
+
+            // Add file analyses
+            testTypes['File Analysis'] = allData.file_analyses.length;
+
+            const labels = Object.keys(testTypes);
+            const data = Object.values(testTypes);
+            const colors = [
+                'rgba(255, 99, 132, 0.8)',
+                'rgba(54, 162, 235, 0.8)',
+                'rgba(255, 205, 86, 0.8)',
+                'rgba(75, 192, 192, 0.8)',
+                'rgba(153, 102, 255, 0.8)'
+            ];
+
+            if (testTypesChart) {
+                testTypesChart.destroy();
+            }
+
+            testTypesChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: colors.slice(0, labels.length),
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update live tests table
+        function updateLiveTestsTable() {
+            const tbody = document.getElementById('live-tests-body');
+            
+            if (allData.test_results.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center text-muted">
+                            <i class="fas fa-vial fa-2x mb-2"></i>
+                            <br>No live tests found
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = allData.test_results.map(test => `
+                <tr>
+                    <td>${new Date(test.created_at).toLocaleDateString()}</td>
+                    <td>${test.device_name || 'Unknown'}</td>
+                    <td><small>${test.app_bundle_id || 'Unknown'}</small></td>
+                    <td>${test.duration_minutes || 0} min</td>
+                    <td><span class="badge bg-primary">${test.test_type || 'Unknown'}</span></td>
+                    <td><strong>${(test.total_percentage || 0).toFixed(3)}%</strong></td>
+                    <td><strong>${(test.app_percentage || 0).toFixed(3)}%</strong></td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="showTestDetails('live', '${test.test_id}')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Update file analyses table
+        function updateFileAnalysesTable() {
+            const tbody = document.getElementById('file-analyses-body');
+            
+            if (allData.file_analyses.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">
+                            <i class="fas fa-file-alt fa-2x mb-2"></i>
+                            <br>No file analyses found
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = allData.file_analyses.map(analysis => `
+                <tr>
+                    <td>${new Date(analysis.analyzed_at).toLocaleDateString()}</td>
+                    <td>${analysis.filename}</td>
+                    <td>${analysis.file_size_kb.toFixed(1)} KB</td>
+                    <td>${(analysis.duration_minutes || 0).toFixed(1)} min</td>
+                    <td><strong>${(analysis.total_percentage || 0).toFixed(3)}%</strong></td>
+                    <td><strong>${(analysis.app_percentage || 0).toFixed(3)}%</strong></td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="showTestDetails('file', '${analysis.id}')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Show live tests table
+        function showLiveTests() {
+            document.getElementById('live-tests-table').style.display = 'block';
+            document.getElementById('file-analyses-table').style.display = 'none';
+            
+            // Update button states
+            document.querySelector('button[onclick="showLiveTests()"]').classList.add('active');
+            document.querySelector('button[onclick="showFileAnalyses()"]').classList.remove('active');
+        }
+
+        // Show file analyses table
+        function showFileAnalyses() {
+            document.getElementById('live-tests-table').style.display = 'none';
+            document.getElementById('file-analyses-table').style.display = 'block';
+            
+            // Update button states
+            document.querySelector('button[onclick="showLiveTests()"]').classList.remove('active');
+            document.querySelector('button[onclick="showFileAnalyses()"]').classList.add('active');
+        }
+
+        // Show test details in modal
+        function showTestDetails(type, id) {
+            let item;
+            if (type === 'live') {
+                item = allData.test_results.find(test => test.test_id === id);
+            } else {
+                item = allData.file_analyses.find(analysis => analysis.id == id);
+            }
+
+            if (!item) {
+                alert('Item not found');
+                return;
+            }
+
+            const results = item.results_json ? JSON.parse(item.results_json) : {};
+            
+            const modalContent = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Basic Information</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>Type:</strong></td><td>${type === 'live' ? 'Live Test' : 'File Analysis'}</td></tr>
+                            <tr><td><strong>Date:</strong></td><td>${new Date(item.created_at || item.analyzed_at).toLocaleString()}</td></tr>
+                            ${type === 'live' ? `<tr><td><strong>Device:</strong></td><td>${item.device_name}</td></tr>` : ''}
+                            ${type === 'live' ? `<tr><td><strong>App:</strong></td><td>${item.app_bundle_id}</td></tr>` : `<tr><td><strong>File:</strong></td><td>${item.filename}</td></tr>`}
+                            <tr><td><strong>Duration:</strong></td><td>${item.duration_minutes || 0} minutes</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Energy Analysis</h6>
+                        <table class="table table-sm">
+                            <tr><td><strong>Total Consumption:</strong></td><td>${(item.total_consumption_mah || 0).toFixed(1)} mAh (${(item.total_percentage || 0).toFixed(3)}%)</td></tr>
+                            <tr><td><strong>App Consumption:</strong></td><td>${(item.app_consumption_mah || 0).toFixed(1)} mAh (${(item.app_percentage || 0).toFixed(3)}%)</td></tr>
+                            <tr><td><strong>Device Capacity:</strong></td><td>${item.device_capacity_mah || 'Unknown'} mAh</td></tr>
+                        </table>
+                    </div>
+                </div>
+                
+                ${Object.keys(results).length > 0 ? `
+                <hr>
+                <h6>Raw Results</h6>
+                <pre class="bg-light p-3" style="max-height: 200px; overflow-y: auto;"><code>${JSON.stringify(results, null, 2)}</code></pre>
+                ` : ''}
+            `;
+
+            document.getElementById('modal-content').innerHTML = modalContent;
+            new bootstrap.Modal(document.getElementById('detail-modal')).show();
+        }
+    </script>
+</body>
+</html>

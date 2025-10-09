@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iOS Battery Testing - Live Testing</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .progress-circle {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            position: relative;
+        }
+        .test-controls { background: #f8f9fa; }
+        .device-card { cursor: pointer; transition: all 0.2s; }
+        .device-card:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .device-card.selected { border-color: #007bff; background-color: #e3f2fd; }
+        .app-item { cursor: pointer; }
+        .app-item:hover { background-color: #f8f9fa; }
+        .app-item.selected { background-color: #e3f2fd; border-left: 3px solid #007bff; }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-battery-three-quarters me-2"></i>
+                iOS Battery Testing Suite
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/"><i class="fas fa-home me-1"></i>Dashboard</a>
+                <a class="nav-link" href="/devices"><i class="fas fa-mobile-alt me-1"></i>Devices</a>
+                <a class="nav-link active" href="/live-testing"><i class="fas fa-play me-1"></i>Live Testing</a>
+                <a class="nav-link" href="/file-analysis"><i class="fas fa-file-upload me-1"></i>File Analysis</a>
+                <a class="nav-link" href="/results"><i class="fas fa-chart-line me-1"></i>Results</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <h1 class="text-primary">
+                    <i class="fas fa-play me-2"></i>
+                    Live Battery Testing
+                </h1>
+                <p class="lead">Real-time battery monitoring with Apple Instruments integration</p>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Test Configuration -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-cog me-2"></i>
+                            Test Configuration
+                        </h5>
+                    </div>
+                    <div class="card-body test-controls">
+                        <!-- Device Selection -->
+                        <div class="mb-4">
+                            <label class="form-label">
+                                <i class="fas fa-mobile-alt me-1"></i>
+                                Select Device
+                            </label>
+                            <div id="device-selection">
+                                <div class="text-center text-muted">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                    <span class="ms-2">Loading devices...</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- App Selection -->
+                        <div class="mb-4" id="app-selection-container" style="display: none;">
+                            <label class="form-label">
+                                <i class="fas fa-mobile-alt me-1"></i>
+                                Select App
+                            </label>
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control" id="app-search" placeholder="Search apps...">
+                                <button class="btn btn-outline-secondary" onclick="loadApps()">
+                                    <i class="fas fa-sync"></i>
+                                </button>
+                            </div>
+                            <div id="app-list" style="max-height: 200px; overflow-y: auto;">
+                                <!-- Apps will be loaded here -->
+                            </div>
+                        </div>
+
+                        <!-- Test Settings -->
+                        <div class="mb-4" id="test-settings" style="display: none;">
+                            <label class="form-label">
+                                <i class="fas fa-clock me-1"></i>
+                                Test Duration
+                            </label>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <input type="number" class="form-control" id="test-duration" value="5" min="1" max="60">
+                                </div>
+                                <div class="col-md-6">
+                                    <select class="form-select" id="duration-unit">
+                                        <option value="minutes">Minutes</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Test Type -->
+                        <div class="mb-4" id="test-type-selection" style="display: none;">
+                            <label class="form-label">
+                                <i class="fas fa-flask me-1"></i>
+                                Test Type
+                            </label>
+                            <select class="form-select" id="test-type">
+                                <option value="hybrid-test">Hybrid Test (Recommended)</option>
+                                <option value="app-test">App Test Only</option>
+                                <option value="monitor">Basic Monitoring</option>
+                                <option value="validate">Validation Test</option>
+                            </select>
+                        </div>
+
+                        <!-- Start Button -->
+                        <div class="d-grid">
+                            <button class="btn btn-success btn-lg" id="start-test-btn" onclick="startTest()" disabled>
+                                <i class="fas fa-play me-2"></i>
+                                Start Battery Test
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Progress & Results -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-line me-2"></i>
+                            Test Progress
+                        </h5>
+                    </div>
+                    <div class="card-body text-center">
+                        <div id="test-status">
+                            <!-- Idle State -->
+                            <div id="idle-state">
+                                <div class="progress-circle bg-light border">
+                                    <i class="fas fa-play fa-3x text-muted"></i>
+                                </div>
+                                <h5 class="text-muted">Ready to Test</h5>
+                                <p class="text-muted">Configure your test settings and click Start</p>
+                            </div>
+
+                            <!-- Running State -->
+                            <div id="running-state" style="display: none;">
+                                <div class="progress-circle">
+                                    <div class="progress position-relative" style="width: 120px; height: 120px;">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                                             role="progressbar" id="test-progress-bar" style="width: 0%"></div>
+                                        <div class="position-absolute top-50 start-50 translate-middle">
+                                            <h4 id="progress-percentage">0%</h4>
+                                        </div>
+                                    </div>
+                                </div>
+                                <h5 class="text-success" id="test-status-text">Starting test...</h5>
+                                <p class="text-muted" id="test-progress-message">Initializing battery monitoring...</p>
+                                
+                                <button class="btn btn-outline-danger" onclick="stopTest()">
+                                    <i class="fas fa-stop me-1"></i>Stop Test
+                                </button>
+                            </div>
+
+                            <!-- Results State -->
+                            <div id="results-state" style="display: none;">
+                                <div class="progress-circle bg-success text-white">
+                                    <i class="fas fa-check fa-3x"></i>
+                                </div>
+                                <h5 class="text-success">Test Complete!</h5>
+                                <div id="test-results-summary">
+                                    <!-- Results will be populated here -->
+                                </div>
+                                <button class="btn btn-primary me-2" onclick="viewDetailedResults()">
+                                    <i class="fas fa-eye me-1"></i>View Details
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="resetTest()">
+                                    <i class="fas fa-redo me-1"></i>New Test
+                                </button>
+                            </div>
+
+                            <!-- Error State -->
+                            <div id="error-state" style="display: none;">
+                                <div class="progress-circle bg-danger text-white">
+                                    <i class="fas fa-exclamation-triangle fa-3x"></i>
+                                </div>
+                                <h5 class="text-danger">Test Failed</h5>
+                                <p class="text-muted" id="error-message">An error occurred during testing</p>
+                                <button class="btn btn-outline-secondary" onclick="resetTest()">
+                                    <i class="fas fa-redo me-1"></i>Try Again
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+        // Global variables
+        let socket = io();
+        let selectedDevice = null;
+        let selectedApp = null;
+        let currentTestId = null;
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDevices();
+            setupSocketListeners();
+            setupAppSearch();
+        });
+
+        // Socket.IO event listeners
+        function setupSocketListeners() {
+            socket.on('test_progress', function(data) {
+                updateTestProgress(data);
+            });
+
+            socket.on('test_complete', function(data) {
+                showTestResults(data);
+            });
+        }
+
+        // Load connected devices
+        function loadDevices() {
+            fetch('/api/devices')
+                .then(response => response.json())
+                .then(data => {
+                    const deviceSelection = document.getElementById('device-selection');
+                    
+                    if (data.success && data.devices.length > 0) {
+                        deviceSelection.innerHTML = data.devices.map(device => `
+                            <div class="card device-card mb-2" data-device='${JSON.stringify(device)}' onclick="selectDevice(this)">
+                                <div class="card-body py-2">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>${device.name}</strong>
+                                            <br>
+                                            <small class="text-muted">${device.connection} Connection</small>
+                                        </div>
+                                        <div>
+                                            <span class="badge ${device.instruments_compatible ? 'bg-success' : 'bg-warning'}">
+                                                ${device.instruments_compatible ? 'Instruments Ready' : 'Limited Support'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('');
+                    } else {
+                        deviceSelection.innerHTML = `
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                No devices detected. Please connect an iOS device.
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading devices:', error);
+                    document.getElementById('device-selection').innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Error loading devices. Please check connection.
+                        </div>
+                    `;
+                });
+        }
+
+        // Select device
+        function selectDevice(element) {
+            // Remove previous selection
+            document.querySelectorAll('.device-card').forEach(card => card.classList.remove('selected'));
+            
+            // Select current device
+            element.classList.add('selected');
+            selectedDevice = JSON.parse(element.dataset.device);
+            
+            // Show app selection
+            document.getElementById('app-selection-container').style.display = 'block';
+            loadApps();
+        }
+
+        // Load apps for selected device
+        function loadApps() {
+            if (!selectedDevice) return;
+            
+            const appList = document.getElementById('app-list');
+            appList.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading apps...</div>';
+            
+            fetch(`/api/apps/${selectedDevice.id}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.apps.length > 0) {
+                        appList.innerHTML = data.apps.map(app => `
+                            <div class="app-item p-2 border-bottom" data-app='${JSON.stringify(app)}' onclick="selectApp(this)">
+                                <strong>${app.name}</strong>
+                                <br>
+                                <small class="text-muted">${app.bundle_id}</small>
+                            </div>
+                        `).join('');
+                        filterApps(); // Apply any existing search filter
+                    } else {
+                        appList.innerHTML = '<div class="text-muted text-center p-3">No apps found</div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading apps:', error);
+                    appList.innerHTML = '<div class="text-danger text-center p-3">Error loading apps</div>';
+                });
+        }
+
+        // Select app
+        function selectApp(element) {
+            // Remove previous selection
+            document.querySelectorAll('.app-item').forEach(item => item.classList.remove('selected'));
+            
+            // Select current app
+            element.classList.add('selected');
+            selectedApp = JSON.parse(element.dataset.app);
+            
+            // Show test settings
+            document.getElementById('test-settings').style.display = 'block';
+            document.getElementById('test-type-selection').style.display = 'block';
+            document.getElementById('start-test-btn').disabled = false;
+        }
+
+        // Setup app search
+        function setupAppSearch() {
+            document.getElementById('app-search').addEventListener('input', filterApps);
+        }
+
+        // Filter apps based on search
+        function filterApps() {
+            const searchTerm = document.getElementById('app-search').value.toLowerCase();
+            const appItems = document.querySelectorAll('.app-item');
+            
+            appItems.forEach(item => {
+                const appData = JSON.parse(item.dataset.app);
+                const matches = appData.name.toLowerCase().includes(searchTerm) || 
+                               appData.bundle_id.toLowerCase().includes(searchTerm);
+                item.style.display = matches ? 'block' : 'none';
+            });
+        }
+
+        // Start battery test
+        function startTest() {
+            if (!selectedDevice || !selectedApp) {
+                alert('Please select a device and app first');
+                return;
+            }
+
+            const testConfig = {
+                device_id: selectedDevice.id,
+                device_name: selectedDevice.name,
+                app_bundle_id: selectedApp.bundle_id,
+                duration_minutes: parseInt(document.getElementById('test-duration').value),
+                test_type: document.getElementById('test-type').value
+            };
+
+            fetch('/api/start-test', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(testConfig)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    currentTestId = data.test_id;
+                    showRunningState();
+                    socket.emit('subscribe_test', {test_id: currentTestId});
+                } else {
+                    alert('Failed to start test: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error starting test:', error);
+                alert('Failed to start test');
+            });
+        }
+
+        // Show running state
+        function showRunningState() {
+            document.getElementById('idle-state').style.display = 'none';
+            document.getElementById('running-state').style.display = 'block';
+            document.getElementById('results-state').style.display = 'none';
+            document.getElementById('error-state').style.display = 'none';
+        }
+
+        // Update test progress
+        function updateTestProgress(data) {
+            if (data.test_id !== currentTestId) return;
+            
+            document.getElementById('progress-percentage').textContent = data.progress + '%';
+            document.getElementById('test-progress-bar').style.width = data.progress + '%';
+            document.getElementById('test-progress-message').textContent = data.message;
+        }
+
+        // Show test results
+        function showTestResults(data) {
+            if (data.test_id !== currentTestId) return;
+            
+            document.getElementById('running-state').style.display = 'none';
+            
+            if (data.status === 'completed') {
+                document.getElementById('results-state').style.display = 'block';
+                
+                const results = data.results;
+                document.getElementById('test-results-summary').innerHTML = `
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <h6 class="text-muted">Total Consumption</h6>
+                            <h4 class="text-primary">${results.total_percentage.toFixed(3)}%</h4>
+                            <small class="text-muted">${results.total_consumption_mah.toFixed(1)} mAh</small>
+                        </div>
+                        <div class="col-6">
+                            <h6 class="text-muted">App Consumption</h6>
+                            <h4 class="text-success">${results.app_percentage.toFixed(3)}%</h4>
+                            <small class="text-muted">${results.app_consumption_mah.toFixed(1)} mAh</small>
+                        </div>
+                    </div>
+                `;
+            } else {
+                document.getElementById('error-state').style.display = 'block';
+                document.getElementById('error-message').textContent = data.error || 'Unknown error occurred';
+            }
+        }
+
+        // Reset test interface
+        function resetTest() {
+            currentTestId = null;
+            document.getElementById('idle-state').style.display = 'block';
+            document.getElementById('running-state').style.display = 'none';
+            document.getElementById('results-state').style.display = 'none';
+            document.getElementById('error-state').style.display = 'none';
+        }
+
+        // View detailed results
+        function viewDetailedResults() {
+            window.location.href = '/results';
+        }
+
+        // Stop test (placeholder)
+        function stopTest() {
+            if (confirm('Are you sure you want to stop the current test?')) {
+                // Implementation would send stop signal to backend
+                resetTest();
+            }
+        }
+    </script>
+</body>
+</html>

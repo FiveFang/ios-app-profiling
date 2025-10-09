@@ -76,6 +76,14 @@ python instruments_tester.py devices
 - **CLI interface** with scan, parse, and analyze commands
 - **Standalone operation** - works independently of main testing utility
 
+#### **Web Interface** (Team Collaboration)
+- **Professional web dashboard** with real-time device detection and test monitoring
+- **Drag-and-drop file analysis** for .aar files with visual results
+- **Live battery testing** with progress tracking and WebSocket updates
+- **Historical analytics** with charts, trends, and team result sharing
+- **Device management** with WiFi/USB connection guidance
+- **Team deployment ready** with Docker support and production configs
+
 ### Quick Commands
 
 #### List Devices and Apps
@@ -114,6 +122,18 @@ python device_profiling_parser.py scan
 
 # Analyze with detailed output
 python device_profiling_parser.py analyze PowerProfiler_file.aar --detailed
+```
+
+#### Web Interface (Team-Friendly)
+```bash
+# Start web interface
+./start_web_ui.sh
+
+# Access in browser
+open http://localhost:5000
+
+# Or use Docker for team deployment
+docker-compose up -d
 ```
 
 ## 🔄 Complete Testing Workflow

@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  ios-battery-testing:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./output:/app/output
+      - ./uploads:/app/uploads
+      - /var/run/docker.sock:/var/run/docker.sock  # For device access if needed
+    environment:
+      - FLASK_ENV=production
+      - SECRET_KEY=your-secure-secret-key-here
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Add a database for persistence
+  # database:
+  #   image: sqlite:latest  # or postgres/mysql
+  #   volumes:
+  #     - ./data:/data
+  #   environment:
+  #     - SQLITE_DATABASE=battery_tests.db

@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iOS Battery Testing - File Analysis</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .drop-zone {
+            border: 2px dashed #007bff;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: #0056b3;
+            background-color: #f8f9ff;
+        }
+        .analysis-card { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            color: white; 
+        }
+        .file-list-item {
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .file-list-item:hover {
+            background-color: #f8f9fa;
+            border-left: 3px solid #007bff;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-battery-three-quarters me-2"></i>
+                iOS Battery Testing Suite
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/"><i class="fas fa-home me-1"></i>Dashboard</a>
+                <a class="nav-link" href="/devices"><i class="fas fa-mobile-alt me-1"></i>Devices</a>
+                <a class="nav-link" href="/live-testing"><i class="fas fa-play me-1"></i>Live Testing</a>
+                <a class="nav-link active" href="/file-analysis"><i class="fas fa-file-upload me-1"></i>File Analysis</a>
+                <a class="nav-link" href="/results"><i class="fas fa-chart-line me-1"></i>Results</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <h1 class="text-primary">
+                    <i class="fas fa-file-upload me-2"></i>
+                    Device Profiling File Analysis
+                </h1>
+                <p class="lead">Analyze .aar files created directly on iOS devices</p>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- File Upload -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-cloud-upload-alt me-2"></i>
+                            Upload .aar File
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Drop Zone -->
+                        <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+                            <i class="fas fa-cloud-upload-alt fa-3x text-primary mb-3"></i>
+                            <h5>Drag & Drop .aar File Here</h5>
+                            <p class="text-muted">Or click to select file</p>
+                            <small class="text-muted">Supports .aar files up to 50MB</small>
+                            <input type="file" id="file-input" accept=".aar" style="display: none;" onchange="handleFileSelect(this)">
+                        </div>
+
+                        <!-- Upload Progress -->
+                        <div class="mt-3" id="upload-progress" style="display: none;">
+                            <div class="progress">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     role="progressbar" id="upload-progress-bar" style="width: 0%"></div>
+                            </div>
+                            <small class="text-muted mt-2 d-block" id="upload-status">Uploading...</small>
+                        </div>
+
+                        <!-- File Info -->
+                        <div class="mt-3" id="file-info" style="display: none;">
+                            <div class="alert alert-info">
+                                <strong id="selected-filename"></strong>
+                                <br>
+                                <small id="selected-filesize"></small>
+                            </div>
+                            <button class="btn btn-primary" onclick="analyzeFile()">
+                                <i class="fas fa-search me-1"></i>
+                                Analyze File
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent File Analyses -->
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-history me-2"></i>
+                            Recent Analyses
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="recent-analyses">
+                            <div class="text-center text-muted">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <span class="ms-2">Loading recent analyses...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analysis Results -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-bar me-2"></i>
+                            Analysis Results
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Idle State -->
+                        <div id="idle-state">
+                            <div class="text-center text-muted py-5">
+                                <i class="fas fa-file-alt fa-4x mb-3"></i>
+                                <h5>Ready for Analysis</h5>
+                                <p>Upload a .aar file to see detailed energy analysis</p>
+                            </div>
+                        </div>
+
+                        <!-- Loading State -->
+                        <div id="loading-state" style="display: none;">
+                            <div class="text-center py-5">
+                                <i class="fas fa-spinner fa-spin fa-3x text-primary mb-3"></i>
+                                <h5>Analyzing File...</h5>
+                                <p class="text-muted">Parsing energy data and extracting insights</p>
+                            </div>
+                        </div>
+
+                        <!-- Results State -->
+                        <div id="results-state" style="display: none;">
+                            <div id="analysis-results">
+                                <!-- Results will be populated here -->
+                            </div>
+                        </div>
+
+                        <!-- Error State -->
+                        <div id="error-state" style="display: none;">
+                            <div class="text-center text-danger py-4">
+                                <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
+                                <h5>Analysis Failed</h5>
+                                <p id="error-message">An error occurred during file analysis</p>
+                                <button class="btn btn-outline-secondary" onclick="resetAnalysis()">
+                                    <i class="fas fa-redo me-1"></i>Try Again
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        let selectedFile = null;
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            setupDropZone();
+            loadRecentAnalyses();
+        });
+
+        // Setup drag and drop functionality
+        function setupDropZone() {
+            const dropZone = document.getElementById('drop-zone');
+            
+            // Prevent default drag behaviors
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, preventDefaults, false);
+                document.body.addEventListener(eventName, preventDefaults, false);
+            });
+
+            // Highlight drop zone when item is dragged over it
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, highlight, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, unhighlight, false);
+            });
+
+            // Handle dropped files
+            dropZone.addEventListener('drop', handleDrop, false);
+        }
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        function highlight(e) {
+            document.getElementById('drop-zone').classList.add('dragover');
+        }
+
+        function unhighlight(e) {
+            document.getElementById('drop-zone').classList.remove('dragover');
+        }
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+
+            if (files.length > 0) {
+                handleFileSelect({files: files});
+            }
+        }
+
+        // Handle file selection
+        function handleFileSelect(input) {
+            const file = input.files[0];
+            
+            if (!file) return;
+
+            if (!file.name.endsWith('.aar')) {
+                alert('Please select a .aar file');
+                return;
+            }
+
+            if (file.size > 50 * 1024 * 1024) { // 50MB limit
+                alert('File size exceeds 50MB limit');
+                return;
+            }
+
+            selectedFile = file;
+            
+            // Show file info
+            document.getElementById('selected-filename').textContent = file.name;
+            document.getElementById('selected-filesize').textContent = `${(file.size / 1024).toFixed(1)} KB`;
+            document.getElementById('file-info').style.display = 'block';
+        }
+
+        // Analyze uploaded file
+        function analyzeFile() {
+            if (!selectedFile) {
+                alert('Please select a file first');
+                return;
+            }
+
+            // Show loading state
+            showLoadingState();
+
+            // Create FormData for file upload
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            // Upload and analyze file
+            fetch('/api/upload-file', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAnalysisResults(data.results);
+                } else {
+                    showErrorState(data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error analyzing file:', error);
+                showErrorState('Failed to analyze file');
+            });
+        }
+
+        // Show different states
+        function showLoadingState() {
+            document.getElementById('idle-state').style.display = 'none';
+            document.getElementById('loading-state').style.display = 'block';
+            document.getElementById('results-state').style.display = 'none';
+            document.getElementById('error-state').style.display = 'none';
+        }
+
+        function showAnalysisResults(results) {
+            document.getElementById('idle-state').style.display = 'none';
+            document.getElementById('loading-state').style.display = 'none';
+            document.getElementById('results-state').style.display = 'block';
+            document.getElementById('error-state').style.display = 'none';
+
+            // Extract data from results
+            const fileInfo = results.file_info || {};
+            const energyData = results.energy_data || {};
+            const estimation = energyData.energy_estimation || {};
+            const timing = energyData.metadata?.timing_info || {};
+
+            // Build results HTML
+            const resultsHTML = `
+                <div class="analysis-card card text-white mb-3">
+                    <div class="card-body text-center">
+                        <h4>Analysis Complete</h4>
+                        <p class="mb-0">File successfully analyzed with energy estimates</p>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h3 class="text-primary">${(estimation.estimated_total_percentage || 0).toFixed(3)}%</h3>
+                                <p class="mb-0 text-muted">Total Consumption</p>
+                                <small class="text-muted">${(estimation.estimated_total_mah || 0).toFixed(1)} mAh</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card text-center">
+                            <div class="card-body">
+                                <h3 class="text-success">${(estimation.estimated_app_percentage || 0).toFixed(3)}%</h3>
+                                <p class="mb-0 text-muted">App Consumption</p>
+                                <small class="text-muted">${(estimation.estimated_app_mah || 0).toFixed(1)} mAh</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-info-circle me-1"></i>
+                            File Information
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm mb-0">
+                            <tr>
+                                <td><strong>File Size:</strong></td>
+                                <td>${((fileInfo.size_bytes || 0) / 1024).toFixed(1)} KB</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Duration:</strong></td>
+                                <td>${(timing.duration_minutes || 0).toFixed(1)} minutes</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Device Capacity:</strong></td>
+                                <td>${estimation.device_capacity_mah || 'Unknown'} mAh</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Analysis Method:</strong></td>
+                                <td>${results.parsing_method || 'Unknown'}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2">
+                    <button class="btn btn-primary" onclick="downloadResults()">
+                        <i class="fas fa-download me-1"></i>
+                        Download JSON Results
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="resetAnalysis()">
+                        <i class="fas fa-upload me-1"></i>
+                        Analyze Another File
+                    </button>
+                </div>
+            `;
+
+            document.getElementById('analysis-results').innerHTML = resultsHTML;
+            loadRecentAnalyses(); // Refresh recent analyses
+        }
+
+        function showErrorState(errorMessage) {
+            document.getElementById('idle-state').style.display = 'none';
+            document.getElementById('loading-state').style.display = 'none';
+            document.getElementById('results-state').style.display = 'none';
+            document.getElementById('error-state').style.display = 'block';
+            document.getElementById('error-message').textContent = errorMessage;
+        }
+
+        function resetAnalysis() {
+            selectedFile = null;
+            document.getElementById('file-input').value = '';
+            document.getElementById('file-info').style.display = 'none';
+            document.getElementById('idle-state').style.display = 'block';
+            document.getElementById('loading-state').style.display = 'none';
+            document.getElementById('results-state').style.display = 'none';
+            document.getElementById('error-state').style.display = 'none';
+        }
+
+        // Load recent file analyses
+        function loadRecentAnalyses() {
+            fetch('/api/historical-results')
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('recent-analyses');
+                    
+                    if (data.success && data.file_analyses.length > 0) {
+                        container.innerHTML = data.file_analyses.slice(0, 5).map(analysis => `
+                            <div class="file-list-item p-2 border-bottom">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>${analysis.filename}</strong>
+                                        <br>
+                                        <small class="text-muted">
+                                            ${new Date(analysis.analyzed_at).toLocaleDateString()} • 
+                                            ${analysis.file_size_kb.toFixed(1)} KB
+                                        </small>
+                                    </div>
+                                    <div class="text-end">
+                                        <div class="text-primary font-weight-bold">
+                                            ${(analysis.total_percentage || 0).toFixed(3)}%
+                                        </div>
+                                        <small class="text-muted">
+                                            ${(analysis.total_consumption_mah || 0).toFixed(1)} mAh
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('');
+                    } else {
+                        container.innerHTML = `
+                            <div class="text-center text-muted py-3">
+                                <i class="fas fa-file-alt fa-2x mb-2"></i>
+                                <p>No analyses yet</p>
+                                <small>Upload .aar files to see history here</small>
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading recent analyses:', error);
+                });
+        }
+
+        // Download results (placeholder)
+        function downloadResults() {
+            alert('Download functionality would be implemented here');
+        }
+    </script>
+</body>
+</html>

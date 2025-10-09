@@ -1,0 +1,513 @@
+#!/usr/bin/env python3
+"""
+iOS Battery Testing Web Interface
+
+A Flask web application providing a user-friendly interface for:
+- Live battery testing with real-time monitoring
+- Device profiling file analysis (.aar files)
+- Historical results and team collaboration
+- Device management and configuration
+
+Usage:
+    python web_ui/app.py
+    Open browser to http://localhost:5000
+"""
+
+import os
+import sys
+import json
+import sqlite3
+import subprocess
+import threading
+import time
+from datetime import datetime, timedelta
+from pathlib import Path
+from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, flash
+from flask_socketio import SocketIO, emit
+from werkzeug.utils import secure_filename
+import uuid
+
+# Add parent directory to path to import our tools
+sys.path.append(str(Path(__file__).parent.parent))
+
+try:
+    from instruments_tester import get_connected_devices, run_battery_test
+except ImportError:
+    print("Warning: Could not import instruments_tester. Some features may not work.")
+
+try:
+    from device_profiling_parser import DeviceProfilingParser
+except ImportError:
+    print("Warning: Could not import device_profiling_parser. File analysis may not work.")
+    DeviceProfilingParser = None
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'ios-battery-testing-secret-key'
+app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
+
+# Initialize SocketIO for real-time updates
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Ensure upload directory exists
+upload_dir = Path(app.config['UPLOAD_FOLDER'])
+upload_dir.mkdir(exist_ok=True)
+
+# Database setup
+DB_PATH = 'battery_tests.db'
+
+def init_database():
+    """Initialize SQLite database for storing test results"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # Test results table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS test_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            test_id TEXT UNIQUE,
+            test_type TEXT,
+            device_name TEXT,
+            app_bundle_id TEXT,
+            duration_minutes INTEGER,
+            total_consumption_mah REAL,
+            app_consumption_mah REAL,
+            total_percentage REAL,
+            app_percentage REAL,
+            device_capacity_mah INTEGER,
+            status TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            results_json TEXT
+        )
+    ''')
+    
+    # File analysis table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS file_analyses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT,
+            file_size_kb REAL,
+            duration_minutes REAL,
+            total_consumption_mah REAL,
+            app_consumption_mah REAL,
+            total_percentage REAL,
+            app_percentage REAL,
+            device_capacity_mah INTEGER,
+            analyzed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            results_json TEXT
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+
+# Initialize database on startup
+init_database()
+
+# Global variables for test management
+active_tests = {}
+device_parser = DeviceProfilingParser() if DeviceProfilingParser else None
+
+@app.route('/')
+def dashboard():
+    """Main dashboard page"""
+    return render_template('dashboard.html')
+
+@app.route('/devices')
+def devices_page():
+    """Device management page"""
+    return render_template('devices.html')
+
+@app.route('/live-testing')
+def live_testing():
+    """Live battery testing page"""
+    return render_template('live_testing.html')
+
+@app.route('/file-analysis')
+def file_analysis():
+    """File analysis page for .aar files"""
+    return render_template('file_analysis.html')
+
+@app.route('/results')
+def results():
+    """Historical results page"""
+    return render_template('results.html')
+
+@app.route('/api/devices')
+def api_devices():
+    """API endpoint to get connected devices"""
+    try:
+        # Run device detection in background to avoid blocking
+        result = subprocess.run(
+            ['python', 'instruments_tester.py', 'devices'],
+            capture_output=True, text=True, timeout=15,
+            cwd=Path(__file__).parent.parent
+        )
+        
+        if result.returncode == 0:
+            # Parse device output
+            devices = []
+            for line in result.stdout.split('\n'):
+                if 'Device:' in line and ('iPhone' in line or 'iPad' in line):
+                    # Extract device info
+                    device_info = {
+                        'name': line.split('Device: ')[1].split(' (')[0],
+                        'id': line.split('(')[1].split(')')[0] if '(' in line else 'unknown',
+                        'connection': 'WiFi' if 'WiFi' in line else 'USB',
+                        'status': 'Connected',
+                        'instruments_compatible': 'Instruments supported' in line
+                    }
+                    devices.append(device_info)
+            
+            return jsonify({'success': True, 'devices': devices})
+        else:
+            return jsonify({'success': False, 'error': 'Device detection failed'})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/apps/<device_id>')
+def api_apps(device_id):
+    """API endpoint to get installed apps for a device"""
+    try:
+        result = subprocess.run(
+            ['python', 'instruments_tester.py', 'list-apps', '--device', device_id],
+            capture_output=True, text=True, timeout=30,
+            cwd=Path(__file__).parent.parent
+        )
+        
+        if result.returncode == 0:
+            apps = []
+            for line in result.stdout.split('\n'):
+                if ' - ' in line:  # App line format: "Bundle ID - App Name"
+                    parts = line.strip().split(' - ', 1)
+                    if len(parts) == 2:
+                        apps.append({
+                            'bundle_id': parts[0],
+                            'name': parts[1]
+                        })
+            
+            return jsonify({'success': True, 'apps': apps})
+        else:
+            return jsonify({'success': False, 'error': 'App listing failed'})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/start-test', methods=['POST'])
+def api_start_test():
+    """API endpoint to start a battery test"""
+    try:
+        data = request.json
+        test_id = str(uuid.uuid4())
+        
+        # Validate required fields
+        required_fields = ['device_id', 'app_bundle_id', 'duration_minutes', 'test_type']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({'success': False, 'error': f'Missing required field: {field}'})
+        
+        # Store test configuration
+        test_config = {
+            'test_id': test_id,
+            'device_id': data['device_id'],
+            'device_name': data.get('device_name', 'Unknown'),
+            'app_bundle_id': data['app_bundle_id'],
+            'duration_minutes': int(data['duration_minutes']),
+            'test_type': data['test_type'],
+            'status': 'starting',
+            'start_time': datetime.now().isoformat(),
+            'progress': 0
+        }
+        
+        active_tests[test_id] = test_config
+        
+        # Start test in background thread
+        thread = threading.Thread(
+            target=run_background_test,
+            args=(test_id, test_config)
+        )
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({'success': True, 'test_id': test_id})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+def run_background_test(test_id, config):
+    """Run battery test in background thread with progress updates"""
+    try:
+        # Update status
+        active_tests[test_id]['status'] = 'running'
+        socketio.emit('test_progress', {
+            'test_id': test_id,
+            'status': 'running',
+            'progress': 0,
+            'message': 'Starting battery test...'
+        })
+        
+        # Build command
+        cmd = [
+            'python', 'instruments_tester.py',
+            config['test_type'],
+            '--device', config['device_id'],
+            '--app', config['app_bundle_id'],
+            '--duration', str(config['duration_minutes'])
+        ]
+        
+        # Run test with progress monitoring
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            cwd=Path(__file__).parent.parent
+        )
+        
+        # Monitor progress
+        duration_seconds = config['duration_minutes'] * 60
+        start_time = time.time()
+        
+        while process.poll() is None:
+            elapsed = time.time() - start_time
+            progress = min(int((elapsed / duration_seconds) * 100), 99)
+            
+            active_tests[test_id]['progress'] = progress
+            socketio.emit('test_progress', {
+                'test_id': test_id,
+                'status': 'running',
+                'progress': progress,
+                'message': f'Testing in progress... {progress}%'
+            })
+            
+            time.sleep(2)  # Update every 2 seconds
+        
+        # Get results
+        stdout, stderr = process.communicate()
+        
+        if process.returncode == 0:
+            # Parse results and save to database
+            results = parse_test_results(stdout)
+            save_test_results(test_id, config, results)
+            
+            active_tests[test_id]['status'] = 'completed'
+            active_tests[test_id]['results'] = results
+            
+            socketio.emit('test_complete', {
+                'test_id': test_id,
+                'status': 'completed',
+                'results': results
+            })
+        else:
+            active_tests[test_id]['status'] = 'failed'
+            active_tests[test_id]['error'] = stderr
+            
+            socketio.emit('test_complete', {
+                'test_id': test_id,
+                'status': 'failed',
+                'error': stderr
+            })
+    
+    except Exception as e:
+        active_tests[test_id]['status'] = 'failed'
+        active_tests[test_id]['error'] = str(e)
+        
+        socketio.emit('test_complete', {
+            'test_id': test_id,
+            'status': 'failed',
+            'error': str(e)
+        })
+
+def parse_test_results(stdout):
+    """Parse test results from stdout"""
+    results = {
+        'total_consumption_mah': 0,
+        'app_consumption_mah': 0,
+        'total_percentage': 0,
+        'app_percentage': 0,
+        'device_capacity_mah': 0
+    }
+    
+    try:
+        # Look for JSON results in output
+        for line in stdout.split('\n'):
+            if line.strip().startswith('{') and 'consumption' in line:
+                data = json.loads(line.strip())
+                if 'battery_analysis' in data:
+                    analysis = data['battery_analysis']
+                    results.update({
+                        'total_consumption_mah': analysis.get('total_consumption_mah', 0),
+                        'app_consumption_mah': analysis.get('app_consumption_mah', 0),
+                        'total_percentage': analysis.get('total_percentage', 0),
+                        'app_percentage': analysis.get('app_percentage', 0),
+                        'device_capacity_mah': analysis.get('device_capacity_mah', 0)
+                    })
+                break
+    except:
+        pass
+    
+    return results
+
+def save_test_results(test_id, config, results):
+    """Save test results to database"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO test_results (
+                test_id, test_type, device_name, app_bundle_id, duration_minutes,
+                total_consumption_mah, app_consumption_mah, total_percentage, app_percentage,
+                device_capacity_mah, status, results_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            test_id, config['test_type'], config['device_name'], config['app_bundle_id'],
+            config['duration_minutes'], results['total_consumption_mah'],
+            results['app_consumption_mah'], results['total_percentage'],
+            results['app_percentage'], results['device_capacity_mah'],
+            'completed', json.dumps(results)
+        ))
+        
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Error saving results: {e}")
+
+@app.route('/api/upload-file', methods=['POST'])
+def api_upload_file():
+    """API endpoint to upload and analyze .aar files"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No file uploaded'})
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'error': 'No file selected'})
+        
+        if not file.filename.endswith('.aar'):
+            return jsonify({'success': False, 'error': 'Only .aar files are supported'})
+        
+        # Save uploaded file
+        filename = secure_filename(file.filename)
+        filepath = upload_dir / filename
+        file.save(filepath)
+        
+        # Analyze file
+        if device_parser:
+            results = device_parser.parse_aar_file(str(filepath))
+        else:
+            return jsonify({'success': False, 'error': 'Device profiling parser not available'})
+        
+        # Save analysis to database
+        save_file_analysis(filename, results)
+        
+        return jsonify({'success': True, 'results': results})
+    
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+def save_file_analysis(filename, results):
+    """Save file analysis results to database"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Extract relevant data from results
+        file_info = results.get('file_info', {})
+        energy_data = results.get('energy_data', {})
+        estimation = energy_data.get('energy_estimation', {})
+        timing = energy_data.get('metadata', {}).get('timing_info', {})
+        
+        cursor.execute('''
+            INSERT INTO file_analyses (
+                filename, file_size_kb, duration_minutes,
+                total_consumption_mah, app_consumption_mah,
+                total_percentage, app_percentage, device_capacity_mah,
+                results_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            filename,
+            file_info.get('size_bytes', 0) / 1024,
+            timing.get('duration_minutes', 0),
+            estimation.get('estimated_total_mah', 0),
+            estimation.get('estimated_app_mah', 0),
+            estimation.get('estimated_total_percentage', 0),
+            estimation.get('estimated_app_percentage', 0),
+            estimation.get('device_capacity_mah', 0),
+            json.dumps(results)
+        ))
+        
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Error saving file analysis: {e}")
+
+@app.route('/api/test-status/<test_id>')
+def api_test_status(test_id):
+    """API endpoint to get test status"""
+    if test_id in active_tests:
+        return jsonify({'success': True, 'test': active_tests[test_id]})
+    else:
+        return jsonify({'success': False, 'error': 'Test not found'})
+
+@app.route('/api/historical-results')
+def api_historical_results():
+    """API endpoint to get historical test results"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Get recent test results
+        cursor.execute('''
+            SELECT * FROM test_results
+            ORDER BY created_at DESC
+            LIMIT 50
+        ''')
+        
+        columns = [description[0] for description in cursor.description]
+        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        # Get recent file analyses
+        cursor.execute('''
+            SELECT * FROM file_analyses
+            ORDER BY analyzed_at DESC
+            LIMIT 50
+        ''')
+        
+        columns = [description[0] for description in cursor.description]
+        file_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'test_results': results,
+            'file_analyses': file_results
+        })
+    
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+# WebSocket events
+@socketio.on('connect')
+def handle_connect():
+    """Handle client connection"""
+    emit('connected', {'message': 'Connected to iOS Battery Testing Server'})
+
+@socketio.on('subscribe_test')
+def handle_subscribe_test(data):
+    """Subscribe to test updates"""
+    test_id = data.get('test_id')
+    if test_id in active_tests:
+        emit('test_subscribed', {'test_id': test_id, 'test': active_tests[test_id]})
+
+if __name__ == '__main__':
+    print("🚀 Starting iOS Battery Testing Web Interface...")
+    print("📱 Dashboard: http://localhost:5000")
+    print("🔋 Live Testing: http://localhost:5000/live-testing")
+    print("📊 File Analysis: http://localhost:5000/file-analysis")
+    print("📈 Results: http://localhost:5000/results")
+    
+    # Run with SocketIO support
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
