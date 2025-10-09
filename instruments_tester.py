@@ -1760,12 +1760,16 @@ def validate_test(device, app, duration):
 
 
 @cli.command()
-def devices():
+@click.option('--json', 'output_json', is_flag=True, help='Output as JSON for API consumption')
+def devices(output_json):
     """List available devices via xcrun xctrace."""
     devices = get_devices()
     
     if not devices:
-        console.print(NO_DEVICES_MSG)
+        if output_json:
+            print('{"success": false, "devices": [], "error": "No devices found"}')
+        else:
+            console.print(NO_DEVICES_MSG)
         return
     
     table = Table(title="Connected iOS Devices (xcrun)")
@@ -1789,7 +1793,32 @@ def devices():
         
         table.add_row(name, model, os_version, udid[:16] + "...", f"{connection_icon} {connection}")
     
-    console.print(table)
+    if output_json:
+        # Format devices for JSON output
+        json_devices = []
+        for device in devices:
+            device_props = device.get("deviceProperties", {})
+            hardware_props = device.get("hardwareProperties", {})
+            connection_props = device.get("connectionProperties", {})
+            
+            json_device = {
+                'name': device_props.get('name', 'Unknown Device'),
+                'model': hardware_props.get('productType', 'Unknown'),
+                'os_version': device_props.get('osVersionNumber', 'Unknown'),
+                'id': device.get('identifier', 'unknown')[:20] + '...' if len(device.get('identifier', '')) > 20 else device.get('identifier', 'unknown'),
+                'full_id': device.get('identifier', 'unknown'),
+                'connection': 'WiFi' if connection_props.get('transportType') == 'wifi' else 'USB',
+                'status': 'Connected' if connection_props.get('status') == 'online' else 'Offline',
+                'instruments_compatible': connection_props.get('instruments_compatible', False)
+            }
+            # Only include connected/online devices
+            if connection_props.get('status') == 'online':
+                json_devices.append(json_device)
+        
+        import json
+        print(json.dumps({'success': True, 'devices': json_devices}))
+    else:
+        console.print(table)
 
 @cli.command()
 @click.option('--device', '-d', help='Device UDID or name')

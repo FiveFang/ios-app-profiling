@@ -28,18 +28,27 @@ from werkzeug.utils import secure_filename
 import uuid
 
 # Add parent directory to path to import our tools
-sys.path.append(str(Path(__file__).parent.parent))
+parent_dir = str(Path(__file__).parent.parent)
+sys.path.insert(0, parent_dir)
+
+# Change working directory to parent to ensure relative imports work
+os.chdir(parent_dir)
 
 try:
-    from instruments_tester import get_connected_devices, run_battery_test
-except ImportError:
-    print("Warning: Could not import instruments_tester. Some features may not work.")
+    import instruments_tester
+    from instruments_tester import get_devices
+    INSTRUMENTS_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Could not import instruments_tester: {e}")
+    INSTRUMENTS_AVAILABLE = False
 
 try:
     from device_profiling_parser import DeviceProfilingParser
-except ImportError:
-    print("Warning: Could not import device_profiling_parser. File analysis may not work.")
+    DEVICE_PARSER_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Could not import device_profiling_parser: {e}")
     DeviceProfilingParser = None
+    DEVICE_PARSER_AVAILABLE = False
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'ios-battery-testing-secret-key'
@@ -137,34 +146,25 @@ def results():
 def api_devices():
     """API endpoint to get connected devices"""
     try:
-        # Run device detection in background to avoid blocking
-        result = subprocess.run(
-            ['python', 'instruments_tester.py', 'devices'],
-            capture_output=True, text=True, timeout=15,
-            cwd=Path(__file__).parent.parent
-        )
+        if not INSTRUMENTS_AVAILABLE:
+            return jsonify({'success': False, 'error': 'Instruments tester not available'})
         
-        if result.returncode == 0:
-            # Parse device output
-            devices = []
-            for line in result.stdout.split('\n'):
-                if 'Device:' in line and ('iPhone' in line or 'iPad' in line):
-                    # Extract device info
-                    device_info = {
-                        'name': line.split('Device: ')[1].split(' (')[0],
-                        'id': line.split('(')[1].split(')')[0] if '(' in line else 'unknown',
-                        'connection': 'WiFi' if 'WiFi' in line else 'USB',
-                        'status': 'Connected',
-                        'instruments_compatible': 'Instruments supported' in line
-                    }
-                    devices.append(device_info)
-            
-            return jsonify({'success': True, 'devices': devices})
+        # Use CLI command with JSON output for better reliability
+        cmd = [sys.executable, 'instruments_tester.py', 'devices', '--json']
+        result = subprocess.run(cmd, capture_output=True, text=True, cwd=parent_dir, timeout=10)
+        
+        if result.returncode == 0 and result.stdout.strip():
+            # Parse JSON response from CLI
+            try:
+                response_data = json.loads(result.stdout.strip())
+                return jsonify(response_data)
+            except json.JSONDecodeError:
+                return jsonify({'success': False, 'error': 'Invalid JSON response from devices command'})
         else:
-            return jsonify({'success': False, 'error': 'Device detection failed'})
-    
+            return jsonify({'success': False, 'error': f'Device detection failed: {result.stderr}'})
+        
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
+        return jsonify({'success': False, 'error': f'Device detection failed: {str(e)}'})
 
 @app.route('/api/apps/<device_id>')
 def api_apps(device_id):
@@ -510,4 +510,4 @@ if __name__ == '__main__':
     print("📈 Results: http://localhost:5000/results")
     
     # Run with SocketIO support
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=False)
