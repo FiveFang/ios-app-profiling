@@ -412,6 +412,15 @@ class DeviceProfilingParser:
                     "estimated_total_percentage": round((estimated_total_mah / device_capacity) * 100, 3),
                     "estimated_app_percentage": round((estimated_app_mah / device_capacity) * 100, 3)
                 })
+            else:
+                # Use default iPhone capacity when device not connected
+                default_capacity = 3582  # iPhone 16 Pro capacity
+                estimated_energy.update({
+                    "device_capacity_mah": default_capacity,
+                    "estimated_total_percentage": round((estimated_total_mah / default_capacity) * 100, 3),
+                    "estimated_app_percentage": round((estimated_app_mah / default_capacity) * 100, 3),
+                    "capacity_note": "Using default iPhone capacity (device not connected)"
+                })
             
             basic_info["energy_estimation"] = estimated_energy
         
