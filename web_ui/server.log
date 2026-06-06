@@ -1,0 +1,12 @@
+🚀 Starting iOS Battery Testing Web Interface...
+📱 Dashboard: http://localhost:5001
+🔋 Live Testing: http://localhost:5001/live-testing
+📊 File Analysis: http://localhost:5001/file-analysis
+📈 Results: http://localhost:5001/results
+ * Serving Flask app 'app'
+ * Debug mode: off
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://172.28.54.155:5001
+[33mPress CTRL+C to quit[0m
