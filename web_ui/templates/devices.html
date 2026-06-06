@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iOS Battery Testing - Devices</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-battery-three-quarters me-2"></i>
+                iOS Battery Testing Suite
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/"><i class="fas fa-home me-1"></i>Dashboard</a>
+                <a class="nav-link active" href="/devices"><i class="fas fa-mobile-alt me-1"></i>Devices</a>
+                <a class="nav-link" href="/live-testing"><i class="fas fa-play me-1"></i>Live Testing</a>
+                <a class="nav-link" href="/file-analysis"><i class="fas fa-file-upload me-1"></i>File Analysis</a>
+                <a class="nav-link" href="/results"><i class="fas fa-chart-line me-1"></i>Results</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <h1 class="text-primary">
+                    <i class="fas fa-mobile-alt me-2"></i>
+                    Device Management
+                </h1>
+                <p class="lead">Connected iOS devices and their capabilities</p>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">
+                                <i class="fas fa-search me-2"></i>
+                                Device Detection
+                            </h5>
+                            <button class="btn btn-primary" onclick="refreshDevices()">
+                                <i class="fas fa-sync me-1"></i>
+                                Refresh Devices
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="device-list">
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                                <p class="mt-2">Detecting devices...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDevices();
+        });
+
+        // Load connected devices
+        function loadDevices() {
+            document.getElementById('device-list').innerHTML = `
+                <div class="text-center text-muted py-4">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i>
+                    <p class="mt-2">Detecting devices...</p>
+                </div>
+            `;
+
+            fetch('/api/devices')
+                .then(response => response.json())
+                .then(data => {
+                    displayDevices(data);
+                })
+                .catch(error => {
+                    console.error('Error loading devices:', error);
+                    document.getElementById('device-list').innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Error loading devices: ${error.message}
+                        </div>
+                    `;
+                });
+        }
+
+        // Display devices in the UI
+        function displayDevices(data) {
+            const deviceList = document.getElementById('device-list');
+            
+            if (data.success && data.devices.length > 0) {
+                deviceList.innerHTML = data.devices.map(device => `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-md-2 text-center">
+                                    <i class="fas fa-mobile-alt fa-3x text-primary"></i>
+                                </div>
+                                <div class="col-md-4">
+                                    <h5 class="card-title">${device.name}</h5>
+                                    <p class="text-muted mb-1">Device ID: ${device.id}</p>
+                                    <span class="badge ${device.connection === 'WiFi' ? 'bg-success' : 'bg-info'}">
+                                        <i class="fas ${device.connection === 'WiFi' ? 'fa-wifi' : 'fa-usb'}"></i>
+                                        ${device.connection} Connection
+                                    </span>
+                                </div>
+                                <div class="col-md-3">
+                                    <h6>Capabilities</h6>
+                                    <div class="d-flex flex-column">
+                                        <span class="badge ${device.instruments_compatible ? 'bg-success' : 'bg-warning'} mb-1">
+                                            <i class="fas ${device.instruments_compatible ? 'fa-check' : 'fa-exclamation-triangle'}"></i>
+                                            ${device.instruments_compatible ? 'Instruments Compatible' : 'Limited Support'}
+                                        </span>
+                                        <small class="text-muted">
+                                            ${device.instruments_compatible ? 
+                                                'Full profiling support available' : 
+                                                'Basic monitoring only'}
+                                        </small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 text-end">
+                                    <a href="/live-testing" class="btn btn-primary">
+                                        <i class="fas fa-play me-1"></i>
+                                        Start Test
+                                    </a>
+                                    <button class="btn btn-outline-secondary" onclick="getDeviceInfo('${device.id}')">
+                                        <i class="fas fa-info me-1"></i>
+                                        Details
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } else if (data.success && data.devices.length === 0) {
+                deviceList.innerHTML = `
+                    <div class="text-center py-5">
+                        <i class="fas fa-mobile-alt fa-4x text-muted mb-3"></i>
+                        <h4 class="text-muted">No Devices Connected</h4>
+                        <p class="text-muted">Connect an iOS device to get started</p>
+                        
+                        <div class="row mt-4">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-usb fa-2x text-info mb-2"></i>
+                                        <h6>USB Connection</h6>
+                                        <p class="small text-muted">Connect device via Lightning/USB-C cable</p>
+                                        <ol class="small text-start">
+                                            <li>Connect device to Mac</li>
+                                            <li>Trust this computer on device</li>
+                                            <li>Enable Developer Mode</li>
+                                        </ol>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-wifi fa-2x text-success mb-2"></i>
+                                        <h6>WiFi Connection (Recommended)</h6>
+                                        <p class="small text-muted">Connect wirelessly for cleaner testing</p>
+                                        <ol class="small text-start">
+                                            <li>Go to Settings → Privacy & Security → Developer</li>
+                                            <li>Enable "Wireless Debugging"</li>
+                                            <li>Connect to same WiFi network</li>
+                                        </ol>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                deviceList.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Error: ${data.error || 'Failed to detect devices'}
+                    </div>
+                `;
+            }
+        }
+
+        // Refresh devices
+        function refreshDevices() {
+            loadDevices();
+        }
+
+        // Get device info (placeholder)
+        function getDeviceInfo(deviceId) {
+            alert(`Device info for ${deviceId} would be displayed here`);
+        }
+    </script>
+</body>
+</html>

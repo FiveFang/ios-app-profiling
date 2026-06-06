@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iOS Battery Testing - Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .feature-card {
+            transition: transform 0.2s;
+            border-left: 4px solid #007bff;
+        }
+        .feature-card:hover { transform: translateY(-5px); }
+        .stats-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .device-status { font-size: 0.8rem; }
+        .online { color: #28a745; }
+        .offline { color: #dc3545; }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-battery-three-quarters me-2"></i>
+                iOS Battery Testing Suite
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/devices"><i class="fas fa-mobile-alt me-1"></i>Devices</a>
+                <a class="nav-link" href="/live-testing"><i class="fas fa-play me-1"></i>Live Testing</a>
+                <a class="nav-link" href="/file-analysis"><i class="fas fa-file-upload me-1"></i>File Analysis</a>
+                <a class="nav-link" href="/results"><i class="fas fa-chart-line me-1"></i>Results</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h1 class="text-primary">
+                    <i class="fas fa-tachometer-alt me-2"></i>
+                    Dashboard
+                </h1>
+                <p class="lead">Professional iOS battery consumption analysis for development teams</p>
+            </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="row mb-4" id="quick-stats">
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-mobile-alt fa-2x mb-2"></i>
+                        <h4 id="connected-devices">-</h4>
+                        <p class="mb-0">Connected Devices</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-play fa-2x mb-2"></i>
+                        <h4 id="active-tests">0</h4>
+                        <p class="mb-0">Active Tests</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-file-alt fa-2x mb-2"></i>
+                        <h4 id="total-analyses">-</h4>
+                        <p class="mb-0">Total Analyses</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card">
+                    <div class="card-body text-center">
+                        <i class="fas fa-clock fa-2x mb-2"></i>
+                        <h4 id="avg-consumption">-</h4>
+                        <p class="mb-0">Avg Consumption</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Features -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card feature-card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-play text-success me-2"></i>
+                            Live Battery Testing
+                        </h5>
+                        <p class="card-text">
+                            Real-time battery monitoring with Apple Instruments integration. 
+                            Supports WiFi and USB connections for accurate energy profiling.
+                        </p>
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-check text-success me-2"></i>BatteryUserTemplate profiling</li>
+                            <li><i class="fas fa-check text-success me-2"></i>App-specific targeting</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Real-time progress monitoring</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Percentage calculations</li>
+                        </ul>
+                        <a href="/live-testing" class="btn btn-success">
+                            <i class="fas fa-rocket me-1"></i>Start Live Test
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card feature-card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-file-upload text-info me-2"></i>
+                            Device Profiling Analysis
+                        </h5>
+                        <p class="card-text">
+                            Analyze .aar files created directly on iOS devices. 
+                            Extract energy consumption data from on-device profiling sessions.
+                        </p>
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-check text-success me-2"></i>Drag & drop file upload</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Multiple parsing methods</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Energy estimation algorithms</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Device capacity detection</li>
+                        </ul>
+                        <a href="/file-analysis" class="btn btn-info">
+                            <i class="fas fa-upload me-1"></i>Analyze Files
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-history me-2"></i>
+                            Recent Test Results
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="recent-results">
+                            <div class="text-center text-muted">
+                                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                                <p class="mt-2">Loading recent results...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-mobile-alt me-2"></i>
+                            Connected Devices
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="device-list">
+                            <div class="text-center text-muted">
+                                <i class="fas fa-spinner fa-spin fa-2x"></i>
+                                <p class="mt-2">Detecting devices...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script>
+        // Initialize Socket.IO connection
+        const socket = io();
+        
+        // Load dashboard data on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDevices();
+            loadRecentResults();
+            loadStats();
+        });
+
+        // Load connected devices
+        function loadDevices() {
+            fetch('/api/devices')
+                .then(response => response.json())
+                .then(data => {
+                    const deviceList = document.getElementById('device-list');
+                    
+                    if (data.success && data.devices.length > 0) {
+                        deviceList.innerHTML = data.devices.map(device => `
+                            <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded">
+                                <div>
+                                    <strong>${device.name}</strong>
+                                    <br>
+                                    <small class="text-muted">${device.connection}</small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge ${device.instruments_compatible ? 'bg-success' : 'bg-warning'}">
+                                        ${device.instruments_compatible ? 'Compatible' : 'Limited'}
+                                    </span>
+                                </div>
+                            </div>
+                        `).join('');
+                        
+                        document.getElementById('connected-devices').textContent = data.devices.length;
+                    } else {
+                        deviceList.innerHTML = `
+                            <div class="text-center text-muted">
+                                <i class="fas fa-mobile-alt fa-2x mb-2"></i>
+                                <p>No devices detected</p>
+                                <small>Connect iOS device via USB or WiFi</small>
+                            </div>
+                        `;
+                        document.getElementById('connected-devices').textContent = '0';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading devices:', error);
+                    document.getElementById('device-list').innerHTML = `
+                        <div class="text-center text-danger">
+                            <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                            <p>Error loading devices</p>
+                        </div>
+                    `;
+                });
+        }
+
+        // Load recent test results
+        function loadRecentResults() {
+            fetch('/api/historical-results')
+                .then(response => response.json())
+                .then(data => {
+                    const resultsContainer = document.getElementById('recent-results');
+                    
+                    if (data.success) {
+                        const allResults = [...data.test_results, ...data.file_analyses];
+                        
+                        if (allResults.length > 0) {
+                            resultsContainer.innerHTML = allResults.slice(0, 5).map(result => {
+                                const isFileAnalysis = result.filename !== undefined;
+                                return `
+                                    <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded">
+                                        <div>
+                                            <strong>${isFileAnalysis ? result.filename : result.app_bundle_id}</strong>
+                                            <br>
+                                            <small class="text-muted">
+                                                ${isFileAnalysis ? 'File Analysis' : 'Live Test'} • 
+                                                ${new Date(isFileAnalysis ? result.analyzed_at : result.created_at).toLocaleDateString()}
+                                            </small>
+                                        </div>
+                                        <div class="text-end">
+                                            <div class="text-primary font-weight-bold">
+                                                ${(result.total_percentage || 0).toFixed(3)}%
+                                            </div>
+                                            <small class="text-muted">
+                                                ${(result.total_consumption_mah || 0).toFixed(1)} mAh
+                                            </small>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('');
+                        } else {
+                            resultsContainer.innerHTML = `
+                                <div class="text-center text-muted">
+                                    <i class="fas fa-chart-line fa-2x mb-2"></i>
+                                    <p>No test results yet</p>
+                                    <small>Start a test to see results here</small>
+                                </div>
+                            `;
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading results:', error);
+                });
+        }
+
+        // Load dashboard statistics
+        function loadStats() {
+            fetch('/api/historical-results')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const totalTests = data.test_results.length;
+                        const totalFiles = data.file_analyses.length;
+                        const allResults = [...data.test_results, ...data.file_analyses];
+                        
+                        document.getElementById('total-analyses').textContent = totalTests + totalFiles;
+                        
+                        if (allResults.length > 0) {
+                            const avgConsumption = allResults.reduce((sum, result) => 
+                                sum + (result.total_percentage || 0), 0) / allResults.length;
+                            document.getElementById('avg-consumption').textContent = avgConsumption.toFixed(2) + '%';
+                        } else {
+                            document.getElementById('avg-consumption').textContent = 'N/A';
+                        }
+                    }
+                });
+        }
+
+        // Refresh data every 30 seconds
+        setInterval(() => {
+            loadDevices();
+            loadRecentResults();
+            loadStats();
+        }, 30000);
+    </script>
+</body>
+</html>
