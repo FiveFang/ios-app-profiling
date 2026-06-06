@@ -1,0 +1,4 @@
+Usage: instruments_tester.py hybrid-test [OPTIONS]
+Try 'instruments_tester.py hybrid-test --help' for help.
+
+Error: Invalid value for '--duration' / '-t': '0.1' is not a valid integer.
